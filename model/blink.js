@@ -7,8 +7,8 @@
 //
 // HEAVY BLINK — asymmetric closure profile:
 //   Slow close (eyelid drooping under fatigue) then fast open (snap-back reflex).
-//   Detected by comparing the EAR rate of change during closing vs opening phases.
-//   openingRate / closingRate >= 2.0 → classified as heavy.
+//   Detected using time thresholds — rate ratios are too noisy at 15fps.
+//   Criteria: closing phase ≥ 200ms AND closing took ≥ 1.5× longer than opening.
 //
 // HEAVY BLINK SCORE — exponential time-decay:
 //   Each confirmed heavy blink contributes a weight that halves every 90s.
@@ -20,7 +20,9 @@ import { EAR_DROWSY } from "./ear";
 const BLINK_MIN_MS        = 80;      // minimum blink duration to record
 const BLINK_MAX_MS        = 500;     // maximum blink duration (longer = PERCLOS territory)
 const WINDOW_MS           = 60_000;  // 60s rolling window for rate/duration stats
-const ASYMMETRY_THRESHOLD = 2.0;     // opening must be ≥2× faster than closing
+const MIN_HEAVY_FRAMES    = 4;       // need ≥4 frames below threshold (~265ms) before classifying
+const MIN_CLOSING_MS      = 200;     // closing phase must take ≥200ms (≥3 frames at 15fps)
+const TIME_ASYMMETRY      = 1.5;     // closing must take ≥1.5× longer than opening (time-based)
 const HEAVY_BLINK_MAX     = 10;      // weighted count at which score reaches 1.0
 const HALF_LIFE_MS        = 90_000;  // exponential decay half-life (90s)
 const PRUNE_MS            = 600_000; // prune heavy blink entries older than 10 min
@@ -79,37 +81,38 @@ export class BlinkTracker {
     }
   }
 
-  /** Analyse closing vs opening rate to detect asymmetric (heavy) blink. */
+  /**
+   * Classify blink as heavy using time-based asymmetry.
+   * Rate ratios are unreliable at 15fps (2-4 samples/blink = too noisy).
+   * Instead: require the closing phase to be slow in absolute terms AND
+   * meaningfully longer than the opening phase.
+   */
   _classifyBlink(nowMs) {
     const vals  = this._earValues;
     const times = this._earTimes;
     const last  = vals.length - 1;
 
-    if (last < 2) return; // need at least 3 frames to split into two phases
+    // Gate 1: need enough frames to have a meaningful two-phase split
+    if (last + 1 < MIN_HEAVY_FRAMES) return;
 
     const earMin   = Math.min(...vals);
     const minIndex = vals.indexOf(earMin);
 
-    // Need a real closing phase AND a real opening phase
+    // Gate 2: need a real closing phase AND a real opening phase
     if (minIndex === 0 || minIndex === last) return;
-
-    const earStart = vals[0];
-    const earEnd   = vals[last];
 
     const closingMs = times[minIndex] - times[0];
     const openingMs = times[last]     - times[minIndex];
 
-    if (closingMs < 1 || openingMs < 1) return; // can't compute rate
+    // Gate 3: closing phase must be genuinely slow (≥200ms = ≥3 frames at 15fps)
+    // This alone eliminates fast blinks regardless of how the frames happen to align.
+    if (closingMs < MIN_CLOSING_MS) return;
 
-    // Rate = EAR change per millisecond
-    const closingRate = (earStart - earMin) / closingMs;
-    const openingRate = (earEnd   - earMin) / openingMs;
+    // Gate 4: closing took meaningfully longer than opening (time asymmetry)
+    // Using time directly, not rate, because EAR magnitude is noisy at threshold.
+    if (closingMs < openingMs * TIME_ASYMMETRY) return;
 
-    if (closingRate <= 0) return; // no real closure occurred
-
-    if (openingRate / closingRate >= ASYMMETRY_THRESHOLD) {
-      this.heavyBlinkTimestamps.push(nowMs);
-    }
+    this.heavyBlinkTimestamps.push(nowMs);
   }
 
   getBlinkRate() {
