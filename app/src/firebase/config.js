@@ -3,12 +3,13 @@
 // If you haven't created a web app yet, click "Add app" → Web icon
 // ─────────────────────────────────────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey: "REPLACE_WITH_YOUR_API_KEY",
-  authDomain: "REPLACE_WITH_YOUR_AUTH_DOMAIN",
-  projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
-  storageBucket: "REPLACE_WITH_YOUR_STORAGE_BUCKET",
-  messagingSenderId: "REPLACE_WITH_YOUR_MESSAGING_SENDER_ID",
-  appId: "REPLACE_WITH_YOUR_APP_ID",
+  apiKey: "AIzaSyDLrAGSbD2Yt5rb_NRrJIZbaygNSBkAqcA",
+  authDomain: "notifeye-f23b5.firebaseapp.com",
+  projectId: "notifeye-f23b5",
+  storageBucket: "notifeye-f23b5.firebasestorage.app",
+  messagingSenderId: "314714632669",
+  appId: "1:314714632669:web:40c832d7eaac84e2d7c634",
+  measurementId: "G-1ZFWYVBRY8"
 };
 
 import { initializeApp, getApps } from "firebase/app";
