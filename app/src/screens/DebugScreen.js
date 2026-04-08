@@ -8,12 +8,13 @@
 // is confirmed on a real physical device.
 
 import { useState, useCallback } from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
 import DetectionEngine from "../detection/DetectionEngine";
 import { ALERT_THRESHOLD } from "../../../model/scorer";
+import { logOut } from "../firebase/authService";
 
 const MAX_ALERT_LOG = 10;
 
@@ -127,6 +128,11 @@ export default function DebugScreen() {
       </View>
 
       <ScrollView style={styles.dataPanel} contentContainerStyle={styles.dataPanelContent}>
+
+        {/* ── DEV: Sign out to retest auth flow ── */}
+        <TouchableOpacity onPress={logOut} style={styles.devSignOut}>
+          <Text style={styles.devSignOutText}>DEV — Sign out</Text>
+        </TouchableOpacity>
 
         {/* ── Composite score ── */}
         <SectionHeader title="COMPOSITE DROWSINESS SCORE" />
@@ -287,6 +293,21 @@ const styles = StyleSheet.create({
   dataPanelContent: {
     paddingHorizontal: 14,
     paddingTop: 6,
+  },
+  devSignOut: {
+    alignSelf: "flex-end",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 6,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  devSignOutText: {
+    color: "#555",
+    fontSize: 10,
+    fontFamily: "monospace",
   },
   sectionHeader: {
     color: C.label,
