@@ -169,19 +169,20 @@ export default function DebugScreen() {
         />
 
         {/* ── Head pose ── */}
-        <SectionHeader title="HEAD POSE" />
+        <SectionHeader title="HEAD POSE  (mount-adjusted)" />
         <Row
           label="Pitch"
           value={fmt(s?.headPose?.pitch, 1)}
           unit="°"
-          color={s?.headPose?.pitch > 15 ? C.drowsy : C.alert}
+          color={s?.headPose?.pitch != null && (5 - s.headPose.pitch) > 10 ? C.drowsy : C.alert}
         />
         <Row
           label="Yaw"
           value={fmt(s?.headPose?.yaw, 1)}
           unit="°"
-          color={Math.abs(s?.headPose?.yaw ?? 0) > 30 ? C.mild : C.alert}
+          color={Math.abs(Math.abs(s?.headPose?.yaw ?? 20) - 20) > 10 ? C.mild : C.alert}
         />
+        <Row label="Head pose score" value={fmt(s?.headPoseScore)} color={scoreColor(s?.headPoseScore)} />
 
         {/* ── Blink ── */}
         <SectionHeader title="BLINK" />
@@ -195,7 +196,13 @@ export default function DebugScreen() {
           label="Avg duration"
           value={s?.avgBlinkMs ? Math.round(s.avgBlinkMs) : "--"}
           unit="ms"
-          color={s?.avgBlinkMs > 250 ? C.drowsy : C.alert}
+          color={s?.avgBlinkMs > 200 ? C.drowsy : C.alert}
+        />
+        <Row
+          label="Heavy blinks"
+          value={s?.heavyBlinkScore != null ? Math.round(s.heavyBlinkScore * 10) : "--"}
+          unit="/ 10"
+          color={s?.heavyBlinkScore > 0.5 ? C.drowsy : C.alert}
         />
 
         {/* ── Yawn ── */}
@@ -206,6 +213,7 @@ export default function DebugScreen() {
 
         {/* ── Weighted contributions ── */}
         <SectionHeader title="WEIGHTED CONTRIBUTIONS" />
+        <ContribBar label="sustained" value={s?.contributions?.sustained} max={0.60} />
         <ContribBar label="perclos " value={s?.contributions?.perclos}  max={0.45} />
         <ContribBar label="headPose" value={s?.contributions?.headPose} max={0.25} />
         <ContribBar label="ear     " value={s?.contributions?.ear}      max={0.18} />
