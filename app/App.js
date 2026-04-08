@@ -1,8 +1,9 @@
+import "react-native-gesture-handler"; // must be first import
 import { useState } from "react";
 import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-
-import DrivingScreen from "./src/screens/DrivingScreen";
+import { AuthProvider } from "./src/context/AuthContext";
+import AppNavigator from "./src/navigation/AppNavigator";
 import DebugScreen from "./src/screens/DebugScreen";
 
 export default function App() {
@@ -10,18 +11,20 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <View style={styles.root}>
-        {showDebug ? <DebugScreen /> : <DrivingScreen />}
+      <AuthProvider>
+        <View style={styles.root}>
+          {showDebug ? <DebugScreen /> : <AppNavigator />}
 
-        {/* Dev toggle — rendered last so it sits above both screens */}
-        <TouchableOpacity
-          style={styles.devButton}
-          onPress={() => setShowDebug(v => !v)}
-          hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-        >
-          <Text style={styles.devButtonText}>{showDebug ? 'UI' : 'DEV'}</Text>
-        </TouchableOpacity>
-      </View>
+          {/* Dev toggle — rendered last so it sits above both screens */}
+          <TouchableOpacity
+            style={styles.devButton}
+            onPress={() => setShowDebug(v => !v)}
+            hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+          >
+            <Text style={styles.devButtonText}>{showDebug ? 'UI' : 'DEV'}</Text>
+          </TouchableOpacity>
+        </View>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }
