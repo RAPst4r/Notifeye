@@ -6,6 +6,7 @@ import {
 } from "firebase/auth";
 import { auth } from "./config";
 import { createUserProfile } from "./firestoreService";
+import { removePushToken } from "./notificationService";
 
 export async function signUp(email, password, name, role) {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
@@ -19,6 +20,8 @@ export async function signIn(email, password) {
 }
 
 export async function logOut() {
+  const uid = auth.currentUser?.uid;
+  if (uid) await removePushToken(uid);
   await signOut(auth);
 }
 

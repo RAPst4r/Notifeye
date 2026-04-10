@@ -22,6 +22,7 @@ export async function createUserProfile(uid, { email, name, role }) {
     subscriptionTier: "free",
     linkedUserIds: [],
     inviteCode,
+    pushTokens: [],     // Expo push tokens — one per device, updated on login/logout
     createdAt: serverTimestamp(),
     quietHoursStart: null,
     quietHoursEnd: null,
