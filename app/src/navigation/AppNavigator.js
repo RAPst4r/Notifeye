@@ -1,5 +1,5 @@
 import React from "react";
-import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -16,6 +16,7 @@ import FamilyLinkScreen from "../screens/onboarding/FamilyLinkScreen";
 
 // Main app screen (Phase 1 debug screen)
 import DebugScreen from "../screens/DebugScreen";
+import SplashScreen from "../screens/SplashScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -29,11 +30,7 @@ export default function AppNavigator() {
   const { user, profile, loading } = useAuth();
 
   if (loading) {
-    return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#00e5ff" />
-      </View>
-    );
+    return <SplashScreen />;
   }
 
   // Determine which stack to show
@@ -60,6 +57,7 @@ export default function AppNavigator() {
           // ── Main app stack ──────────────────────────────────────────────────
           <>
             <Stack.Screen name="Debug" component={DebugScreen} />
+            <Stack.Screen name="Splash" component={SplashScreen} />
             {/* Phase 3+ screens will be added here */}
           </>
         )}
@@ -68,11 +66,4 @@ export default function AppNavigator() {
   );
 }
 
-const styles = StyleSheet.create({
-  loader: {
-    flex: 1,
-    backgroundColor: "#0a0a0a",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+const styles = StyleSheet.create({});
