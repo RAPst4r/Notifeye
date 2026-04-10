@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase/config";
 import { getUserProfile } from "../firebase/firestoreService";
+import { registerForPushNotifications } from "../firebase/notificationService";
 
 const AuthContext = createContext(null);
 
@@ -16,6 +17,10 @@ export function AuthProvider({ children }) {
         setUser(firebaseUser);
         const p = await getUserProfile(firebaseUser.uid);
         setProfile(p);
+        // Register push token once onboarding is complete (role is set)
+        if (p?.role) {
+          registerForPushNotifications(firebaseUser.uid);
+        }
       } else {
         setUser(null);
         setProfile(null);
