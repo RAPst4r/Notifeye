@@ -93,7 +93,7 @@ function ContribBar({ label, value, max = 0.45 }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export default function DebugScreen() {
+export default function DebugScreen({ navigation }) {
   const [signals, setSignals]   = useState(null);
   const [alertLog, setAlertLog] = useState([]);
   const [status, setStatus]     = useState("Initializing...");
@@ -129,10 +129,15 @@ export default function DebugScreen() {
 
       <ScrollView style={styles.dataPanel} contentContainerStyle={styles.dataPanelContent}>
 
-        {/* ── DEV: Sign out to retest auth flow ── */}
-        <TouchableOpacity onPress={logOut} style={styles.devSignOut}>
-          <Text style={styles.devSignOutText}>DEV — Sign out</Text>
-        </TouchableOpacity>
+        {/* ── DEV: testing buttons ── */}
+        <View style={styles.devRow}>
+          <TouchableOpacity onPress={logOut} style={styles.devSignOut}>
+            <Text style={styles.devSignOutText}>DEV — Sign out</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate("Splash")} style={styles.devSignOut}>
+            <Text style={styles.devSignOutText}>DEV — Splash</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* ── Composite score ── */}
         <SectionHeader title="COMPOSITE DROWSINESS SCORE" />
@@ -306,15 +311,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 6,
   },
+  devRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 2,
+  },
   devSignOut: {
-    alignSelf: "flex-end",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: "#333",
     borderRadius: 6,
-    marginTop: 4,
-    marginBottom: 2,
   },
   devSignOutText: {
     color: "#555",
