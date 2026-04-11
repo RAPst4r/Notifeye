@@ -20,9 +20,9 @@ import { EAR_DROWSY } from "./ear";
 const BLINK_MIN_MS        = 80;      // minimum blink duration to record
 const BLINK_MAX_MS        = 500;     // maximum blink duration (longer = PERCLOS territory)
 const WINDOW_MS           = 60_000;  // 60s rolling window for rate/duration stats
-const MIN_HEAVY_FRAMES    = 4;       // need ≥4 frames below threshold (~265ms) before classifying
-const MIN_CLOSING_MS      = 200;     // closing phase must take ≥200ms (≥3 frames at 15fps)
-const TIME_ASYMMETRY      = 1.5;     // closing must take ≥1.5× longer than opening (time-based)
+const MIN_HEAVY_FRAMES    = 3;       // need ≥3 frames below threshold before classifying
+const MIN_CLOSING_MS      = 130;     // closing phase must take ≥130ms (≥2 frames at 15fps)
+const TIME_ASYMMETRY      = 2.0;     // closing must take ≥2× longer than opening (time-based)
 const HEAVY_BLINK_MAX     = 10;      // weighted count at which score reaches 1.0
 const HALF_LIFE_MS        = 90_000;  // exponential decay half-life (90s)
 const PRUNE_MS            = 600_000; // prune heavy blink entries older than 10 min
