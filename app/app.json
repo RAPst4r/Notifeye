@@ -2,6 +2,7 @@
   "expo": {
     "name": "Notifeye",
     "slug": "notifeye",
+    "scheme": "notifeye",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,9 +16,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.notifeye.app",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Notifeye uses the front camera to monitor for drowsy driving.",
-        "NSMicrophoneUsageDescription": "Microphone access is required by the camera API."
+        "NSMicrophoneUsageDescription": "Microphone access is required by the camera API.",
+        "NSContactsUsageDescription": "Notifeye uses your contacts to help you invite your circle and set an emergency buddy."
       }
     },
     "android": {
@@ -31,6 +34,7 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_CONTACTS",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
         "android.permission.POST_NOTIFICATIONS"
@@ -45,7 +49,9 @@
           "color": "#00e5ff",
           "sounds": []
         }
-      ]
+      ],
+      "expo-web-browser",
+      "expo-apple-authentication"
     ],
     "web": {
       "favicon": "./assets/favicon.png"

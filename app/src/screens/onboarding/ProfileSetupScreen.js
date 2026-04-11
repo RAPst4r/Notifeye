@@ -35,7 +35,7 @@ export default function ProfileSetupScreen({ navigation }) {
         // Driver — onboarding done. AuthContext profile now has a role, so
         // AppNavigator will automatically route to the main stack.
         // Navigate explicitly in case the navigator hasn't re-evaluated yet.
-        navigation.reset({ index: 0, routes: [{ name: "Debug" }] });
+        navigation.reset({ index: 0, routes: [{ name: "Main" }] });
       }
     } catch {
       Alert.alert("Error", "Could not save your profile. Please try again.");

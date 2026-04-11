@@ -45,7 +45,7 @@ export default function FamilyLinkScreen({ navigation }) {
   function finishOnboarding() {
     // Onboarding complete — AppNavigator will route to the main stack
     // because profile.role is set. Force a reset to be safe.
-    navigation.reset({ index: 0, routes: [{ name: "Debug" }] });
+    navigation.reset({ index: 0, routes: [{ name: "Main" }] });
   }
 
   return (

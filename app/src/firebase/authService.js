@@ -3,14 +3,19 @@ import {
   signInWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
+  signInWithCredential,
+  GoogleAuthProvider,
+  OAuthProvider,
 } from "firebase/auth";
 import { auth } from "./config";
-import { createUserProfile } from "./firestoreService";
+import { createUserProfile, getUserProfile } from "./firestoreService";
 import { removePushToken } from "./notificationService";
+
+// ── Email / Password ──────────────────────────────────────────────────────────
 
 export async function signUp(email, password, name, role) {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
-  await createUserProfile(credential.user.uid, { email, name, role });
+  await createUserProfile(credential.user.uid, { email, name, lastName: "", role, ssoProvider: null });
   return credential.user;
 }
 
@@ -27,4 +32,53 @@ export async function logOut() {
 
 export async function resetPassword(email) {
   await sendPasswordResetEmail(auth, email);
+}
+
+// ── Google SSO ────────────────────────────────────────────────────────────────
+
+// Called from AuthMethodScreen after expo-auth-session returns an id_token.
+// role is passed from RoleSelectScreen and only used for new users.
+// firstName/lastName come from NameEntryScreen (step 2) and take priority over
+// whatever Google returns, since the user typed them explicitly.
+export async function signInWithGoogleCredential(idToken, role, firstName, lastName) {
+  const credential = GoogleAuthProvider.credential(idToken);
+  const result = await signInWithCredential(auth, credential);
+
+  const existing = await getUserProfile(result.user.uid);
+  if (!existing) {
+    const resolvedFirst = firstName || result.user.displayName?.split(" ")[0] || "";
+    const resolvedLast  = lastName  || result.user.displayName?.split(" ").slice(1).join(" ") || "";
+    await createUserProfile(result.user.uid, {
+      email:       result.user.email ?? "",
+      name:        resolvedFirst,
+      lastName:    resolvedLast,
+      role,
+      ssoProvider: "google",
+    });
+  }
+
+  return result.user;
+}
+
+// ── Apple SSO ─────────────────────────────────────────────────────────────────
+
+// Called from AuthMethodScreen after AppleAuthentication.signInAsync().
+// fullName is the Apple credential fullName object (only provided on first sign-in).
+export async function signInWithAppleCredential(identityToken, role, firstName, lastName) {
+  const provider = new OAuthProvider("apple.com");
+  const credential = provider.credential({ idToken: identityToken });
+  const result = await signInWithCredential(auth, credential);
+
+  const existing = await getUserProfile(result.user.uid);
+  if (!existing) {
+    await createUserProfile(result.user.uid, {
+      email:       result.user.email ?? "",
+      name:        firstName ?? "",
+      lastName:    lastName ?? "",
+      role,
+      ssoProvider: "apple",
+    });
+  }
+
+  return result.user;
 }

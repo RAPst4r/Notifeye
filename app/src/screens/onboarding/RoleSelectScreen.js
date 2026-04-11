@@ -1,54 +1,55 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
-  Alert,
+  ScrollView,
 } from "react-native";
-import { updateUserProfile } from "../../firebase/firestoreService";
-import { useAuth } from "../../context/AuthContext";
+import OnboardingProgress from "../../components/OnboardingProgress";
+import { Colors } from "../../theme/colors";
 
 const ROLES = [
   {
     id: "driver",
+    icon: "🚗",
     label: "Driver",
-    description: "I want real-time drowsiness alerts while I drive.",
+    description: "Get real-time drowsiness alerts while you drive.",
   },
   {
     id: "parent",
+    icon: "👨‍👧",
     label: "Parent / Guardian",
-    description: "I want to be notified when a driver I'm linked to gets an alert.",
+    description: "Stay notified when a driver you're linked to needs attention.",
+  },
+  {
+    id: "other",
+    icon: "🤝",
+    label: "Family / Friend",
+    description: "Watch over someone in your circle — a sibling, partner, or friend.",
   },
 ];
 
 export default function RoleSelectScreen({ navigation }) {
-  const { user, refreshProfile } = useAuth();
   const [selected, setSelected] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  async function handleContinue() {
-    if (!selected) {
-      Alert.alert("Select a role", "Choose how you'll use Notifeye.");
-      return;
-    }
-    setLoading(true);
-    try {
-      await updateUserProfile(user.uid, { role: selected });
-      refreshProfile({ role: selected });
-      navigation.navigate("ProfileSetup");
-    } catch {
-      Alert.alert("Error", "Could not save your role. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+  function handleContinue() {
+    if (!selected) return;
+    // Pass role as a param — Firestore write happens in AuthMethodScreen after
+    // account creation so we don't create a partial profile if the user backs out.
+    navigation.navigate("NameEntry", { role: selected });
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.step}>Step 1 of 3</Text>
-      <Text style={styles.title}>How will you use Notifeye?</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.inner}
+      keyboardShouldPersistTaps="handled"
+    >
+      <OnboardingProgress step={1} />
+      <Text style={styles.step}>Step 1 of 13</Text>
+      <Text style={styles.title}>How will you{"\n"}use Notifeye?</Text>
+      <Text style={styles.subtitle}>Choose the option that best describes you.</Text>
 
       {ROLES.map((role) => (
         <TouchableOpacity
@@ -58,69 +59,65 @@ export default function RoleSelectScreen({ navigation }) {
           activeOpacity={0.8}
         >
           <View style={styles.cardRow}>
-            <View style={[styles.radio, selected === role.id && styles.radioSelected]} />
+            <Text style={styles.cardIcon}>{role.icon}</Text>
             <View style={styles.cardText}>
               <Text style={styles.cardLabel}>{role.label}</Text>
               <Text style={styles.cardDesc}>{role.description}</Text>
             </View>
+            <View style={[styles.radio, selected === role.id && styles.radioSelected]} />
           </View>
         </TouchableOpacity>
       ))}
 
       <TouchableOpacity
-        style={[styles.primaryBtn, (!selected || loading) && styles.disabled]}
+        style={[styles.primaryBtn, !selected && styles.disabled]}
         onPress={handleContinue}
-        disabled={!selected || loading}
+        disabled={!selected}
       >
-        {loading ? (
-          <ActivityIndicator color="#0a0a0a" />
-        ) : (
-          <Text style={styles.primaryBtnText}>Continue</Text>
-        )}
+        <Text style={styles.primaryBtnText}>Continue →</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0a0a0a",
-    paddingHorizontal: 32,
-    paddingTop: 72,
-  },
-  step: { color: "#444", fontSize: 12, marginBottom: 8, letterSpacing: 1 },
-  title: { color: "#fff", fontSize: 24, fontWeight: "700", marginBottom: 36 },
+  container: { flex: 1, backgroundColor: Colors.bgPrimary },
+  inner: { paddingHorizontal: 28, paddingTop: 72, paddingBottom: 40 },
+  step:     { color: Colors.textMuted, fontSize: 12, marginBottom: 8, letterSpacing: 1 },
+  title:    { color: Colors.white, fontSize: 28, fontWeight: "800", lineHeight: 36, marginBottom: 10 },
+  subtitle: { color: Colors.textMuted, fontSize: 14, marginBottom: 36 },
+
   card: {
-    backgroundColor: "#1a1a1a",
-    borderWidth: 1,
-    borderColor: "#2a2a2a",
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: Colors.bgSecondary,
+    borderWidth: 1.5,
+    borderColor: "#1a2a3a",
+    borderRadius: 16,
+    padding: 18,
     marginBottom: 14,
   },
-  cardSelected: { borderColor: "#00e5ff" },
-  cardRow: { flexDirection: "row", alignItems: "flex-start" },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: "#444",
-    marginRight: 14,
-    marginTop: 2,
-  },
-  radioSelected: { borderColor: "#00e5ff", backgroundColor: "#00e5ff" },
+  cardSelected: { borderColor: Colors.brandBlue },
+  cardRow:  { flexDirection: "row", alignItems: "center" },
+  cardIcon: { fontSize: 26, marginRight: 14 },
   cardText: { flex: 1 },
-  cardLabel: { color: "#fff", fontSize: 16, fontWeight: "600", marginBottom: 4 },
-  cardDesc: { color: "#666", fontSize: 13, lineHeight: 18 },
-  primaryBtn: {
-    backgroundColor: "#00e5ff",
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 16,
+  cardLabel: { color: Colors.white, fontSize: 16, fontWeight: "700", marginBottom: 4 },
+  cardDesc:  { color: Colors.textMuted, fontSize: 13, lineHeight: 18 },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: "#2a3a4a",
+    marginLeft: 12,
   },
-  disabled: { opacity: 0.4 },
-  primaryBtnText: { color: "#0a0a0a", fontWeight: "700", fontSize: 15 },
+  radioSelected: { borderColor: Colors.brandBlue, backgroundColor: Colors.brandBlue },
+
+  primaryBtn: {
+    backgroundColor: Colors.brandBlue,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  disabled: { opacity: 0.35 },
+  primaryBtnText: { color: Colors.bgPrimary, fontWeight: "800", fontSize: 16 },
 });
