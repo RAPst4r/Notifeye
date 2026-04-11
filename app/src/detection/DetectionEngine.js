@@ -1,13 +1,20 @@
 // DetectionEngine — React Native component
 //
-// Renders a WebView that runs the MediaPipe face landmark pipeline.
-// For each frame the WebView posts raw signals (EAR, head pose, MAR).
-// This component owns the rolling-window trackers and composite scorer,
-// then calls onSignals() with the full signal state every frame.
+// Renders a WebView running the MediaPipe face landmark pipeline.
+// Owns all rolling-window trackers, composite scorer, and alert audio.
+//
+// ALERT BEHAVIOUR:
+//   - Beep starts (loops) when composite >= 0.55 and cooldown has elapsed.
+//   - Beep stops when composite drops below 0.55.
+//   - Recovery cooldown (12s) only starts counting when score reaches the
+//     truly ALERT zone (< 0.30). Mild (0.30–0.55) is limbo — beep is off
+//     but the timer hasn't started yet.
+//   - expo-av plays the beep natively so it bypasses iOS silent mode.
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { StyleSheet } from "react-native";
 import { WebView } from "react-native-webview";
+import { Audio } from "expo-av";
 
 import { DETECTION_HTML } from "./detectionEngineHTML";
 import { PerclosTracker, SustainedClosureDetector } from "../../../model/perclos";
@@ -20,20 +27,87 @@ import {
   ALERT_THRESHOLD,
 } from "../../../model/scorer";
 
-// How long score must stay below threshold before another alert can fire.
-// Starts counting from the moment the score drops below the threshold —
-// gives the driver 12 seconds of genuine recovery before re-alerting.
-const RECOVERY_COOLDOWN_MS = 12_000;
+const ALERT_LEVEL       = 0.30;   // truly alert — below this starts the recovery timer
+const RECOVERY_MS       = 12_000; // 12s below ALERT_LEVEL required before re-alerting
+const BEEP_INTERVAL_MS  = 1600;   // gap between repeating beeps while drowsy
 
 export default function DetectionEngine({ onSignals, onAlert, onStatus, style }) {
-  const webViewRef      = useRef(null);
-  const perclosRef      = useRef(new PerclosTracker());
-  const sustainedRef    = useRef(new SustainedClosureDetector());
-  const blinkRef        = useRef(new BlinkTracker());
-  const yawnRef         = useRef(new YawnTracker());
-  const isAlertingRef   = useRef(false); // true while score >= threshold
-  const recoveredAtRef  = useRef(0);     // timestamp when score last dropped below threshold
+  const webViewRef     = useRef(null);
+  const perclosRef     = useRef(new PerclosTracker());
+  const sustainedRef   = useRef(new SustainedClosureDetector());
+  const blinkRef       = useRef(new BlinkTracker());
+  const yawnRef        = useRef(new YawnTracker());
 
+  // Alert state machine refs
+  const isAlertingRef  = useRef(false); // true while beep is looping
+  const hadAlertRef    = useRef(false); // true after first alert until fully recovered
+  const clearedAtRef   = useRef(0);     // timestamp when score first dropped to < ALERT_LEVEL
+
+  // Audio refs
+  const soundRef       = useRef(null);
+  const beepTimerRef   = useRef(null);
+
+  // ── Audio setup ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    let mounted = true;
+
+    async function setupAudio() {
+      try {
+        // playsInSilentModeIOS: true → bypasses the mute/silent switch
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS:      true,
+          staysActiveInBackground:   false,
+          shouldDuckAndroid:         false,
+          playThroughEarpieceAndroid: false,
+        });
+
+        const { sound } = await Audio.Sound.createAsync(
+          require("../../assets/beep.wav"),
+          { shouldPlay: false, volume: 1.0 }
+        );
+
+        if (mounted) soundRef.current = sound;
+      } catch (e) {
+        console.warn("Audio setup failed:", e.message);
+      }
+    }
+
+    setupAudio();
+
+    return () => {
+      mounted = false;
+      stopBeep();
+      soundRef.current?.unloadAsync().catch(() => {});
+    };
+  }, []);
+
+  // ── Beep helpers ─────────────────────────────────────────────────────────────
+  async function playBeepOnce() {
+    try {
+      const sound = soundRef.current;
+      if (!sound) return;
+      await sound.stopAsync();
+      await sound.setPositionAsync(0);
+      await sound.playAsync();
+    } catch {}
+  }
+
+  function startBeep() {
+    if (isAlertingRef.current) return;
+    isAlertingRef.current = true;
+    playBeepOnce();
+    beepTimerRef.current = setInterval(playBeepOnce, BEEP_INTERVAL_MS);
+  }
+
+  function stopBeep() {
+    if (!isAlertingRef.current) return;
+    isAlertingRef.current = false;
+    clearInterval(beepTimerRef.current);
+    beepTimerRef.current = null;
+    soundRef.current?.stopAsync().catch(() => {});
+  }
+
+  // ── Frame handler ─────────────────────────────────────────────────────────
   const handleMessage = useCallback((event) => {
     let msg;
     try {
@@ -56,93 +130,79 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
 
     const now = timestamp ?? Date.now();
 
-    // Update all rolling-window trackers
+    // Update trackers
     perclosRef.current.update(ear.avg);
     sustainedRef.current.update(ear.avg);
     blinkRef.current.update(ear.avg, now);
     yawnRef.current.update(mar, now);
 
-    const perclos            = perclosRef.current.getPerclos();
-    const sustainedClosure   = sustainedRef.current.getScore();
-    const blinkRate          = blinkRef.current.getBlinkRate();
-    const avgBlinkMs         = blinkRef.current.getAvgDurationMs();
-    const blinkScore         = blinkRef.current.getBlinkScore();
-    const heavyBlinkScore    = blinkRef.current.getHeavyBlinkScore();
-    const rapidBlinkScore    = blinkRef.current.getRapidBlinkScore();
-    const yawnScore          = yawnRef.current.getYawnScore();
-    const yawnCount          = yawnRef.current.yawnCount;
-    const headPoseScore      = getHeadPoseScore(headPose);
+    const perclos          = perclosRef.current.getPerclos();
+    const sustainedClosure = sustainedRef.current.getScore();
+    const blinkRate        = blinkRef.current.getBlinkRate();
+    const avgBlinkMs       = blinkRef.current.getAvgDurationMs();
+    const blinkScore       = blinkRef.current.getBlinkScore();
+    const heavyBlinkScore  = blinkRef.current.getHeavyBlinkScore();
+    const rapidBlinkScore  = blinkRef.current.getRapidBlinkScore();
+    const yawnScore        = yawnRef.current.getYawnScore();
+    const yawnCount        = yawnRef.current.yawnCount;
+    const headPoseScore    = getHeadPoseScore(headPose);
 
     const composite = computeDrowsinessScore({
-      sustainedClosure,
-      perclos,
-      headPoseScore,
-      ear: ear.avg,
-      blinkScore,
-      yawnScore,
+      sustainedClosure, perclos, headPoseScore,
+      ear: ear.avg, blinkScore, yawnScore,
     });
 
     const contributions = getWeightedContributions({
-      sustainedClosure,
-      perclos,
-      headPoseScore,
-      ear: ear.avg,
-      blinkScore,
-      yawnScore,
+      sustainedClosure, perclos, headPoseScore,
+      ear: ear.avg, blinkScore, yawnScore,
     });
 
-    // ── Alert state machine ───────────────────────────────────────────────────
-    const wasAlerting = isAlertingRef.current;
-
+    // ── Alert state machine ─────────────────────────────────────────────────
     if (composite >= ALERT_THRESHOLD) {
-      // Score is above threshold
-      if (!wasAlerting) {
-        // Transition: recovered → alerting
-        // Only fire if the driver had >= RECOVERY_COOLDOWN_MS of recovery time
-        const recoveryMs = recoveredAtRef.current > 0
-          ? now - recoveredAtRef.current
-          : Infinity; // first ever alert — always allow
+      // ── DROWSY zone ─────────────────────────────────────────────────────
+      if (!isAlertingRef.current) {
+        const canAlert = !hadAlertRef.current ||                               // first-ever alert
+          (clearedAtRef.current > 0 && now - clearedAtRef.current >= RECOVERY_MS); // recovered
 
-        if (recoveryMs >= RECOVERY_COOLDOWN_MS) {
-          isAlertingRef.current = true;
-          recoveredAtRef.current = 0;
-          webViewRef.current?.injectJavaScript(
-            'document.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "ALERT_START" }) })); true;'
-          );
+        if (canAlert) {
+          hadAlertRef.current   = true;
+          clearedAtRef.current  = 0;
+          startBeep();
           onAlert?.(now, composite);
         }
-        // If not enough recovery time: don't start alerting yet
       }
-      // If already alerting: beep is already looping — nothing to do
+      // If already alerting: beep is already looping — nothing to do.
+      // Don't reset clearedAtRef here — it's used by the check above.
+
+    } else if (composite < ALERT_LEVEL) {
+      // ── TRULY ALERT zone ─────────────────────────────────────────────────
+      if (isAlertingRef.current) stopBeep();
+
+      if (hadAlertRef.current) {
+        if (clearedAtRef.current === 0) {
+          clearedAtRef.current = now; // start recovery timer
+        } else if (now - clearedAtRef.current >= RECOVERY_MS) {
+          // Fully recovered — ready to alert again
+          hadAlertRef.current  = false;
+          clearedAtRef.current = 0;
+        }
+      }
+
     } else {
-      // Score is below threshold
-      if (wasAlerting) {
-        // Transition: alerting → recovered — stop the beep, start cooldown timer
-        isAlertingRef.current = false;
-        recoveredAtRef.current = now;
-        webViewRef.current?.injectJavaScript(
-          'document.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "ALERT_STOP" }) })); true;'
-        );
-      }
+      // ── MILD zone (0.30–0.55) ─────────────────────────────────────────────
+      // Beep stops but recovery timer does NOT start.
+      if (isAlertingRef.current) stopBeep();
+      // clearedAtRef stays 0 — limbo until they reach truly alert.
     }
 
     onSignals?.({
       faceDetected: true,
-      ear,
-      headPose,
-      mar,
-      perclos,
-      sustainedClosure,
-      blinkRate,
-      avgBlinkMs,
-      blinkScore,
-      heavyBlinkScore,
-      rapidBlinkScore,
-      yawnScore,
-      yawnCount,
-      headPoseScore,
-      composite,
-      contributions,
+      ear, headPose, mar,
+      perclos, sustainedClosure,
+      blinkRate, avgBlinkMs, blinkScore,
+      heavyBlinkScore, rapidBlinkScore,
+      yawnScore, yawnCount,
+      headPoseScore, composite, contributions,
     });
   }, [onSignals, onAlert, onStatus]);
 
@@ -164,8 +224,5 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
 }
 
 const styles = StyleSheet.create({
-  webview: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
+  webview: { flex: 1, backgroundColor: "#000" },
 });

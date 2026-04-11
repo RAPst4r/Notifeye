@@ -84,49 +84,9 @@ export const DETECTION_HTML = `<!DOCTYPE html>
       return { pitch, yaw };
     }
 
-    // ── Alert beep (Web Audio API) ────────────────────────────────────────────
-    // Loops while the driver is drowsy. Silenced by ALERT_STOP from RN.
-    let audioCtx      = null;
-    let alertInterval = null;   // setInterval handle for looping beeps
-    let alertActive   = false;
-
-    function ensureAudioCtx() {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === "suspended") audioCtx.resume();
-      return audioCtx;
-    }
-
-    function playBeep() {
-      try {
-        const ctx  = ensureAudioCtx();
-        const osc  = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.type = "sine";
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(1.0, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 1.2);
-      } catch (e) {
-        console.warn("beep failed:", e.message);
-      }
-    }
-
-    function startAlert() {
-      if (alertActive) return;
-      alertActive = true;
-      playBeep(); // immediate first beep
-      alertInterval = setInterval(playBeep, 1500); // repeat every 1.5s
-    }
-
-    function stopAlert() {
-      if (!alertActive) return;
-      alertActive = false;
-      clearInterval(alertInterval);
-      alertInterval = null;
-    }
+    // ── Alert state (audio handled by RN side via expo-av) ───────────────────
+    // ALERT_START / ALERT_STOP messages are received from RN but audio is
+    // played natively so it works in silent mode and at full system volume.
 
     // ── Frame loop ────────────────────────────────────────────────────────────
     let faceLandmarker = null;
@@ -241,17 +201,11 @@ export const DETECTION_HTML = `<!DOCTYPE html>
     }
 
     // ── Messages from RN ──────────────────────────────────────────────────────
-    // ALERT_START: score crossed threshold — begin looping beep
-    // ALERT_STOP:  score dropped below threshold — silence beep
-    function handleMsg(e) {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "ALERT_START") startAlert();
-        if (msg.type === "ALERT_STOP")  stopAlert();
-      } catch {}
-    }
-    document.addEventListener("message", handleMsg); // iOS
-    window.addEventListener("message", handleMsg);   // Android
+    // Reserved for future visual feedback (overlay colour changes etc.)
+    // Audio is handled entirely on the RN side via expo-av.
+    function handleMsg(e) { /* no-op for now */ }
+    document.addEventListener("message", handleMsg);
+    window.addEventListener("message", handleMsg);
 
     init();
   </script>
