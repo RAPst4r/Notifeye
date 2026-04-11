@@ -64,6 +64,7 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     const avgBlinkMs         = blinkRef.current.getAvgDurationMs();
     const blinkScore         = blinkRef.current.getBlinkScore();
     const heavyBlinkScore    = blinkRef.current.getHeavyBlinkScore();
+    const rapidBlinkScore    = blinkRef.current.getRapidBlinkScore();
     const yawnScore          = yawnRef.current.getYawnScore();
     const yawnCount          = yawnRef.current.yawnCount;
     const headPoseScore      = getHeadPoseScore(headPose);
@@ -106,6 +107,7 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
       avgBlinkMs,
       blinkScore,
       heavyBlinkScore,
+      rapidBlinkScore,
       yawnScore,
       yawnCount,
       headPoseScore,

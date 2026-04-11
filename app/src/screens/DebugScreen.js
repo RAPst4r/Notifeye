@@ -200,9 +200,13 @@ export default function DebugScreen() {
         />
         <Row
           label="Heavy blinks"
-          value={s?.heavyBlinkScore != null ? Math.round(s.heavyBlinkScore * 10) : "--"}
-          unit="/ 10"
+          value={fmt(s?.heavyBlinkScore)}
           color={s?.heavyBlinkScore > 0.5 ? C.drowsy : C.alert}
+        />
+        <Row
+          label="Rapid blinks"
+          value={fmt(s?.rapidBlinkScore)}
+          color={s?.rapidBlinkScore > 0.5 ? C.drowsy : C.alert}
         />
 
         {/* ── Yawn ── */}
