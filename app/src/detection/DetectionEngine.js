@@ -19,7 +19,11 @@ import { useRef, useCallback, useEffect } from "react";
 import { StyleSheet } from "react-native";
 import { WebView } from "react-native-webview";
 import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
-import { VolumeManager } from "react-native-volume-manager";
+// react-native-volume-manager requires a dev build (native module — not available in Expo Go).
+// Lazy-require so the app loads normally in Expo Go; volume boost activates automatically
+// once a proper dev build is installed.
+let VolumeManager = null;
+try { VolumeManager = require("react-native-volume-manager").VolumeManager; } catch {}
 
 import { DETECTION_HTML } from "./detectionEngineHTML";
 import { PerclosTracker, SustainedClosureDetector } from "../../../model/perclos";
@@ -77,12 +81,15 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     isAlertingRef.current = true;
 
     // Save current volume and slam to max — like Tile does on ring
-    try {
-      const current = await VolumeManager.getVolume();
-      savedVolumeRef.current = current?.volume ?? 1.0;
-      await VolumeManager.setVolume(1.0, { showUI: false });
-    } catch (e) {
-      console.warn("[Notifeye] Volume boost failed:", e.message);
+    // (no-op in Expo Go; works automatically in a dev build)
+    if (VolumeManager) {
+      try {
+        const current = await VolumeManager.getVolume();
+        savedVolumeRef.current = current?.volume ?? 1.0;
+        await VolumeManager.setVolume(1.0, { showUI: false });
+      } catch (e) {
+        console.warn("[Notifeye] Volume boost failed:", e.message);
+      }
     }
 
     try { player.play(); } catch {}
@@ -95,13 +102,13 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     try { player.pause(); } catch {}
 
     // Restore volume
-    try {
-      if (savedVolumeRef.current !== null) {
+    if (VolumeManager && savedVolumeRef.current !== null) {
+      try {
         await VolumeManager.setVolume(savedVolumeRef.current, { showUI: false });
-        savedVolumeRef.current = null;
+      } catch (e) {
+        console.warn("[Notifeye] Volume restore failed:", e.message);
       }
-    } catch (e) {
-      console.warn("[Notifeye] Volume restore failed:", e.message);
+      savedVolumeRef.current = null;
     }
   }
 
