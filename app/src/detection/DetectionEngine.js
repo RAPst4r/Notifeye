@@ -18,7 +18,7 @@
 import { useRef, useCallback, useEffect } from "react";
 import { StyleSheet } from "react-native";
 import { WebView } from "react-native-webview";
-import { Audio } from "expo-av";
+import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import { VolumeManager } from "react-native-volume-manager";
 
 import { DETECTION_HTML } from "./detectionEngineHTML";
@@ -47,53 +47,33 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
   const hadAlertRef   = useRef(false);
   const clearedAtRef  = useRef(0);
 
-  // Audio
-  const soundRef        = useRef(null);
-  const audioReadyRef   = useRef(false);
-  const savedVolumeRef  = useRef(null); // volume level before alert, restored after
+  // Audio — useAudioPlayer creates and manages the player lifecycle automatically
+  const player         = useAudioPlayer(require("../../assets/beep.wav"));
+  const savedVolumeRef = useRef(null);
 
   // ── Audio init ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    let mounted = true;
-
     (async () => {
       try {
-        // Must set audio mode BEFORE loading the sound so iOS honours the session
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS:        true,   // bypass mute switch
-          allowsRecordingIOS:          false,
-          staysActiveInBackground:     false,
-          shouldDuckAndroid:           false,
-          playThroughEarpieceAndroid:  false,
+        await setAudioModeAsync({
+          playsInSilentMode: true,        // bypass iOS mute switch
+          interruptionMode:  "duckOthers",
         });
-
-        const { sound } = await Audio.Sound.createAsync(
-          require("../../assets/beep.wav"),
-          {
-            shouldPlay:  false,
-            isLooping:   true,   // loops automatically — no setInterval needed
-            volume:      1.0,
-          }
-        );
-
-        if (!mounted) { sound.unloadAsync(); return; }
-        soundRef.current  = sound;
-        audioReadyRef.current = true;
+        player.loop   = true;             // loop automatically
+        player.volume = 1.0;
       } catch (e) {
         console.warn("[Notifeye] Audio init failed:", e.message);
       }
     })();
 
     return () => {
-      mounted = false;
-      _stopBeep();
-      soundRef.current?.unloadAsync().catch(() => {});
+      try { player.remove(); } catch {}
     };
   }, []);
 
   // ── Beep control ────────────────────────────────────────────────────────────
   async function _startBeep() {
-    if (isAlertingRef.current || !audioReadyRef.current) return;
+    if (isAlertingRef.current) return;
     isAlertingRef.current = true;
 
     // Save current volume and slam to max — like Tile does on ring
@@ -105,15 +85,16 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
       console.warn("[Notifeye] Volume boost failed:", e.message);
     }
 
-    soundRef.current?.playAsync().catch(() => {});
+    try { player.play(); } catch {}
   }
 
   async function _stopBeep() {
     if (!isAlertingRef.current) return;
     isAlertingRef.current = false;
-    soundRef.current?.stopAsync().catch(() => {});
 
-    // Restore volume to what it was before the alert
+    try { player.pause(); } catch {}
+
+    // Restore volume
     try {
       if (savedVolumeRef.current !== null) {
         await VolumeManager.setVolume(savedVolumeRef.current, { showUI: false });
