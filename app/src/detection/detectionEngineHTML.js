@@ -85,14 +85,17 @@ export const DETECTION_HTML = `<!DOCTYPE html>
     }
 
     // ── Alert beep (Web Audio API) ────────────────────────────────────────────
-    // Used to produce an audible alert inside the WebView.
-    // Phase 1: Web Audio tone. Replace with expo-av before production.
-    let audioCtx = null;
+    // Loops while the driver is drowsy. Silenced by ALERT_STOP from RN.
+    let audioCtx      = null;
+    let alertInterval = null;   // setInterval handle for looping beeps
+    let alertActive   = false;
+
     function ensureAudioCtx() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === "suspended") audioCtx.resume();
       return audioCtx;
     }
+
     function playBeep() {
       try {
         const ctx  = ensureAudioCtx();
@@ -103,12 +106,26 @@ export const DETECTION_HTML = `<!DOCTYPE html>
         osc.type = "sine";
         osc.frequency.value = 880;
         gain.gain.setValueAtTime(1.0, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.5);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2);
         osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 1.5);
+        osc.stop(ctx.currentTime + 1.2);
       } catch (e) {
         console.warn("beep failed:", e.message);
       }
+    }
+
+    function startAlert() {
+      if (alertActive) return;
+      alertActive = true;
+      playBeep(); // immediate first beep
+      alertInterval = setInterval(playBeep, 1500); // repeat every 1.5s
+    }
+
+    function stopAlert() {
+      if (!alertActive) return;
+      alertActive = false;
+      clearInterval(alertInterval);
+      alertInterval = null;
     }
 
     // ── Frame loop ────────────────────────────────────────────────────────────
@@ -224,20 +241,17 @@ export const DETECTION_HTML = `<!DOCTYPE html>
     }
 
     // ── Messages from RN ──────────────────────────────────────────────────────
-    // RN sends { type: "ALERT" } when composite score crosses the threshold.
-    document.addEventListener("message", (e) => {
+    // ALERT_START: score crossed threshold — begin looping beep
+    // ALERT_STOP:  score dropped below threshold — silence beep
+    function handleMsg(e) {
       try {
         const msg = JSON.parse(e.data);
-        if (msg.type === "ALERT") playBeep();
+        if (msg.type === "ALERT_START") startAlert();
+        if (msg.type === "ALERT_STOP")  stopAlert();
       } catch {}
-    });
-    // Android fires on window, iOS on document
-    window.addEventListener("message", (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "ALERT") playBeep();
-      } catch {}
-    });
+    }
+    document.addEventListener("message", handleMsg); // iOS
+    window.addEventListener("message", handleMsg);   // Android
 
     init();
   </script>

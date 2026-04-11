@@ -20,15 +20,19 @@ import {
   ALERT_THRESHOLD,
 } from "../../../model/scorer";
 
-const ALERT_COOLDOWN_MS = 5000; // minimum gap between alerts
+// How long score must stay below threshold before another alert can fire.
+// Starts counting from the moment the score drops below the threshold —
+// gives the driver 12 seconds of genuine recovery before re-alerting.
+const RECOVERY_COOLDOWN_MS = 12_000;
 
 export default function DetectionEngine({ onSignals, onAlert, onStatus, style }) {
-  const webViewRef    = useRef(null);
-  const perclosRef    = useRef(new PerclosTracker());
-  const sustainedRef  = useRef(new SustainedClosureDetector());
-  const blinkRef      = useRef(new BlinkTracker());
-  const yawnRef       = useRef(new YawnTracker());
-  const lastAlertTs   = useRef(0);
+  const webViewRef      = useRef(null);
+  const perclosRef      = useRef(new PerclosTracker());
+  const sustainedRef    = useRef(new SustainedClosureDetector());
+  const blinkRef        = useRef(new BlinkTracker());
+  const yawnRef         = useRef(new YawnTracker());
+  const isAlertingRef   = useRef(false); // true while score >= threshold
+  const recoveredAtRef  = useRef(0);     // timestamp when score last dropped below threshold
 
   const handleMessage = useCallback((event) => {
     let msg;
@@ -87,13 +91,39 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
       yawnScore,
     });
 
-    // Fire alert when composite crosses threshold (with cooldown)
-    if (composite >= ALERT_THRESHOLD && now - lastAlertTs.current > ALERT_COOLDOWN_MS) {
-      lastAlertTs.current = now;
-      webViewRef.current?.injectJavaScript(
-        'document.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "ALERT" }) })); true;'
-      );
-      onAlert?.(now, composite);
+    // ── Alert state machine ───────────────────────────────────────────────────
+    const wasAlerting = isAlertingRef.current;
+
+    if (composite >= ALERT_THRESHOLD) {
+      // Score is above threshold
+      if (!wasAlerting) {
+        // Transition: recovered → alerting
+        // Only fire if the driver had >= RECOVERY_COOLDOWN_MS of recovery time
+        const recoveryMs = recoveredAtRef.current > 0
+          ? now - recoveredAtRef.current
+          : Infinity; // first ever alert — always allow
+
+        if (recoveryMs >= RECOVERY_COOLDOWN_MS) {
+          isAlertingRef.current = true;
+          recoveredAtRef.current = 0;
+          webViewRef.current?.injectJavaScript(
+            'document.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "ALERT_START" }) })); true;'
+          );
+          onAlert?.(now, composite);
+        }
+        // If not enough recovery time: don't start alerting yet
+      }
+      // If already alerting: beep is already looping — nothing to do
+    } else {
+      // Score is below threshold
+      if (wasAlerting) {
+        // Transition: alerting → recovered — stop the beep, start cooldown timer
+        isAlertingRef.current = false;
+        recoveredAtRef.current = now;
+        webViewRef.current?.injectJavaScript(
+          'document.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "ALERT_STOP" }) })); true;'
+        );
+      }
     }
 
     onSignals?.({
