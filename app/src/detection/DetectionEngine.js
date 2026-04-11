@@ -3,13 +3,17 @@
 // Renders a WebView running the MediaPipe face landmark pipeline.
 // Owns all rolling-window trackers, composite scorer, and alert audio.
 //
-// ALERT BEHAVIOUR:
-//   - Beep starts (loops) when composite >= 0.55 and cooldown has elapsed.
-//   - Beep stops when composite drops below 0.55.
-//   - Recovery cooldown (12s) only starts counting when score reaches the
-//     truly ALERT zone (< 0.30). Mild (0.30–0.55) is limbo — beep is off
-//     but the timer hasn't started yet.
-//   - expo-av plays the beep natively so it bypasses iOS silent mode.
+// AUDIO STRATEGY:
+//   The beep.wav file is exactly 1.6s (1s beep + 0.6s silence).
+//   Setting isLooping: true makes it repeat automatically with the correct
+//   gap between beeps — no setInterval needed, no drift, no missed beeps.
+//   playsInSilentModeIOS: true bypasses the iOS mute switch.
+//
+// ALERT STATE MACHINE:
+//   DROWSY (>= 0.55) → beep loops
+//   MILD   (0.30–0.55) → beep stops, recovery timer does NOT start
+//   ALERT  (< 0.30)  → beep stops, 12s recovery timer starts
+//   After 12s in ALERT zone → driver considered recovered, next trigger allowed
 
 import { useRef, useCallback, useEffect } from "react";
 import { StyleSheet } from "react-native";
@@ -27,94 +31,81 @@ import {
   ALERT_THRESHOLD,
 } from "../../../model/scorer";
 
-const ALERT_LEVEL       = 0.30;   // truly alert — below this starts the recovery timer
-const RECOVERY_MS       = 12_000; // 12s below ALERT_LEVEL required before re-alerting
-const BEEP_INTERVAL_MS  = 1600;   // gap between repeating beeps while drowsy
+const ALERT_LEVEL    = 0.30;   // truly alert — below this starts recovery timer
+const RECOVERY_MS    = 12_000; // 12s in ALERT zone required before re-alerting
 
 export default function DetectionEngine({ onSignals, onAlert, onStatus, style }) {
-  const webViewRef     = useRef(null);
-  const perclosRef     = useRef(new PerclosTracker());
-  const sustainedRef   = useRef(new SustainedClosureDetector());
-  const blinkRef       = useRef(new BlinkTracker());
-  const yawnRef        = useRef(new YawnTracker());
+  const webViewRef   = useRef(null);
+  const perclosRef   = useRef(new PerclosTracker());
+  const sustainedRef = useRef(new SustainedClosureDetector());
+  const blinkRef     = useRef(new BlinkTracker());
+  const yawnRef      = useRef(new YawnTracker());
 
-  // Alert state machine refs
-  const isAlertingRef  = useRef(false); // true while beep is looping
-  const hadAlertRef    = useRef(false); // true after first alert until fully recovered
-  const clearedAtRef   = useRef(0);     // timestamp when score first dropped to < ALERT_LEVEL
+  // Alert state
+  const isAlertingRef = useRef(false);
+  const hadAlertRef   = useRef(false);
+  const clearedAtRef  = useRef(0);
 
-  // Audio refs
-  const soundRef       = useRef(null);
-  const beepTimerRef   = useRef(null);
+  // Audio
+  const soundRef      = useRef(null);
+  const audioReadyRef = useRef(false);
 
-  // ── Audio setup ─────────────────────────────────────────────────────────────
+  // ── Audio init ──────────────────────────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
 
-    async function setupAudio() {
+    (async () => {
       try {
-        // playsInSilentModeIOS: true → bypasses the mute/silent switch
+        // Must set audio mode BEFORE loading the sound so iOS honours the session
         await Audio.setAudioModeAsync({
-          playsInSilentModeIOS:      true,
-          staysActiveInBackground:   false,
-          shouldDuckAndroid:         false,
-          playThroughEarpieceAndroid: false,
+          playsInSilentModeIOS:        true,   // bypass mute switch
+          allowsRecordingIOS:          false,
+          staysActiveInBackground:     false,
+          shouldDuckAndroid:           false,
+          playThroughEarpieceAndroid:  false,
         });
 
         const { sound } = await Audio.Sound.createAsync(
           require("../../assets/beep.wav"),
-          { shouldPlay: false, volume: 1.0 }
+          {
+            shouldPlay:  false,
+            isLooping:   true,   // loops automatically — no setInterval needed
+            volume:      1.0,
+          }
         );
 
-        if (mounted) soundRef.current = sound;
+        if (!mounted) { sound.unloadAsync(); return; }
+        soundRef.current  = sound;
+        audioReadyRef.current = true;
       } catch (e) {
-        console.warn("Audio setup failed:", e.message);
+        console.warn("[Notifeye] Audio init failed:", e.message);
       }
-    }
-
-    setupAudio();
+    })();
 
     return () => {
       mounted = false;
-      stopBeep();
+      _stopBeep();
       soundRef.current?.unloadAsync().catch(() => {});
     };
   }, []);
 
-  // ── Beep helpers ─────────────────────────────────────────────────────────────
-  async function playBeepOnce() {
-    try {
-      const sound = soundRef.current;
-      if (!sound) return;
-      await sound.stopAsync();
-      await sound.setPositionAsync(0);
-      await sound.playAsync();
-    } catch {}
-  }
-
-  function startBeep() {
-    if (isAlertingRef.current) return;
+  // ── Beep control ────────────────────────────────────────────────────────────
+  function _startBeep() {
+    if (isAlertingRef.current || !audioReadyRef.current) return;
     isAlertingRef.current = true;
-    playBeepOnce();
-    beepTimerRef.current = setInterval(playBeepOnce, BEEP_INTERVAL_MS);
+    soundRef.current?.playAsync().catch(() => {});
   }
 
-  function stopBeep() {
+  function _stopBeep() {
     if (!isAlertingRef.current) return;
     isAlertingRef.current = false;
-    clearInterval(beepTimerRef.current);
-    beepTimerRef.current = null;
     soundRef.current?.stopAsync().catch(() => {});
   }
 
-  // ── Frame handler ─────────────────────────────────────────────────────────
+  // ── Frame handler ───────────────────────────────────────────────────────────
   const handleMessage = useCallback((event) => {
     let msg;
-    try {
-      msg = JSON.parse(event.nativeEvent.data);
-    } catch {
-      return;
-    }
+    try { msg = JSON.parse(event.nativeEvent.data); } catch { return; }
 
     if (msg.type === "STATUS") { onStatus?.(msg.message); return; }
     if (msg.type === "ERROR")  { onStatus?.("Error: " + msg.message); return; }
@@ -122,15 +113,10 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     if (msg.type !== "FRAME")  return;
 
     const { faceDetected, ear, headPose, mar, timestamp } = msg;
-
-    if (!faceDetected) {
-      onSignals?.({ faceDetected: false });
-      return;
-    }
+    if (!faceDetected) { onSignals?.({ faceDetected: false }); return; }
 
     const now = timestamp ?? Date.now();
 
-    // Update trackers
     perclosRef.current.update(ear.avg);
     sustainedRef.current.update(ear.avg);
     blinkRef.current.update(ear.avg, now);
@@ -159,40 +145,32 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
 
     // ── Alert state machine ─────────────────────────────────────────────────
     if (composite >= ALERT_THRESHOLD) {
-      // ── DROWSY zone ─────────────────────────────────────────────────────
+      // DROWSY — start beep if allowed
       if (!isAlertingRef.current) {
-        const canAlert = !hadAlertRef.current ||                               // first-ever alert
-          (clearedAtRef.current > 0 && now - clearedAtRef.current >= RECOVERY_MS); // recovered
+        const recovered = !hadAlertRef.current ||
+          (clearedAtRef.current > 0 && now - clearedAtRef.current >= RECOVERY_MS);
 
-        if (canAlert) {
-          hadAlertRef.current   = true;
-          clearedAtRef.current  = 0;
-          startBeep();
+        if (recovered) {
+          hadAlertRef.current  = true;
+          clearedAtRef.current = 0;
+          _startBeep();
           onAlert?.(now, composite);
         }
       }
-      // If already alerting: beep is already looping — nothing to do.
-      // Don't reset clearedAtRef here — it's used by the check above.
 
     } else if (composite < ALERT_LEVEL) {
-      // ── TRULY ALERT zone ─────────────────────────────────────────────────
-      if (isAlertingRef.current) stopBeep();
-
-      if (hadAlertRef.current) {
-        if (clearedAtRef.current === 0) {
-          clearedAtRef.current = now; // start recovery timer
-        } else if (now - clearedAtRef.current >= RECOVERY_MS) {
-          // Fully recovered — ready to alert again
-          hadAlertRef.current  = false;
-          clearedAtRef.current = 0;
-        }
+      // TRULY ALERT — stop beep, start recovery timer
+      _stopBeep();
+      if (hadAlertRef.current && clearedAtRef.current === 0) {
+        clearedAtRef.current = now;
+      } else if (hadAlertRef.current && now - clearedAtRef.current >= RECOVERY_MS) {
+        hadAlertRef.current  = false;
+        clearedAtRef.current = 0;
       }
 
     } else {
-      // ── MILD zone (0.30–0.55) ─────────────────────────────────────────────
-      // Beep stops but recovery timer does NOT start.
-      if (isAlertingRef.current) stopBeep();
-      // clearedAtRef stays 0 — limbo until they reach truly alert.
+      // MILD (0.30–0.55) — stop beep, do NOT start timer
+      _stopBeep();
     }
 
     onSignals?.({
