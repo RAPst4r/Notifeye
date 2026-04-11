@@ -19,11 +19,15 @@ import { useRef, useCallback, useEffect } from "react";
 import { StyleSheet } from "react-native";
 import { WebView } from "react-native-webview";
 import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
-// react-native-volume-manager requires a dev build (native module — not available in Expo Go).
-// Lazy-require so the app loads normally in Expo Go; volume boost activates automatically
-// once a proper dev build is installed.
-let VolumeManager = null;
-try { VolumeManager = require("react-native-volume-manager").VolumeManager; } catch {}
+// react-native-volume-manager requires a dev build (not available in Expo Go).
+// Lazy-require so the app loads in Expo Go; volume boost works in dev build automatically.
+let _getVolume = null;
+let _setVolume = null;
+try {
+  const vm  = require("react-native-volume-manager");
+  _getVolume = vm.getVolume;
+  _setVolume = vm.setVolume;
+} catch {}
 
 import { DETECTION_HTML } from "./detectionEngineHTML";
 import { PerclosTracker, SustainedClosureDetector } from "../../../model/perclos";
@@ -36,8 +40,8 @@ import {
   ALERT_THRESHOLD,
 } from "../../../model/scorer";
 
-const ALERT_LEVEL    = 0.30;   // truly alert — below this starts recovery timer
-const RECOVERY_MS    = 12_000; // 12s in ALERT zone required before re-alerting
+const ALERT_LEVEL    = 0.30;   // below this = truly alert, recovery timer starts
+const RECOVERY_MS    = 12_000; // must stay in ALERT zone for 12s before re-alerting
 
 export default function DetectionEngine({ onSignals, onAlert, onStatus, style }) {
   const webViewRef   = useRef(null);
@@ -47,9 +51,9 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
   const yawnRef      = useRef(new YawnTracker());
 
   // Alert state
-  const isAlertingRef = useRef(false);
-  const hadAlertRef   = useRef(false);
-  const clearedAtRef  = useRef(0);
+  const isAlertingRef      = useRef(false); // true while beep is looping
+  const inCooldownRef      = useRef(false); // true during 12s recovery window
+  const cooldownStartRef   = useRef(0);     // timestamp when cooldown began
 
   // Audio — useAudioPlayer creates and manages the player lifecycle automatically
   const player         = useAudioPlayer(require("../../assets/beep.wav"));
@@ -80,13 +84,12 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     if (isAlertingRef.current) return;
     isAlertingRef.current = true;
 
-    // Save current volume and slam to max — like Tile does on ring
-    // (no-op in Expo Go; works automatically in a dev build)
-    if (VolumeManager) {
+    // Boost volume to max (Tile-style) — no-op in Expo Go, works in dev build
+    if (_getVolume && _setVolume) {
       try {
-        const current = await VolumeManager.getVolume();
-        savedVolumeRef.current = current?.volume ?? 1.0;
-        await VolumeManager.setVolume(1.0, { showUI: false });
+        const result = await _getVolume();
+        savedVolumeRef.current = result?.volume ?? 1.0;
+        await _setVolume(1.0, { showUI: false });
       } catch (e) {
         console.warn("[Notifeye] Volume boost failed:", e.message);
       }
@@ -101,10 +104,10 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
 
     try { player.pause(); } catch {}
 
-    // Restore volume
-    if (VolumeManager && savedVolumeRef.current !== null) {
+    // Restore saved volume
+    if (_setVolume && savedVolumeRef.current !== null) {
       try {
-        await VolumeManager.setVolume(savedVolumeRef.current, { showUI: false });
+        await _setVolume(savedVolumeRef.current, { showUI: false });
       } catch (e) {
         console.warn("[Notifeye] Volume restore failed:", e.message);
       }
@@ -154,33 +157,43 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     });
 
     // ── Alert state machine ─────────────────────────────────────────────────
-    if (composite >= ALERT_THRESHOLD) {
-      // DROWSY — start beep if allowed
-      if (!isAlertingRef.current) {
-        const recovered = !hadAlertRef.current ||
-          (clearedAtRef.current > 0 && now - clearedAtRef.current >= RECOVERY_MS);
+    //
+    // DROWSY (>= 0.55): beep starts unless in 12s cooldown window
+    // MILD   (0.30–0.55): beep stops — cooldown does NOT start — re-alert
+    //                     fires immediately if score goes back to drowsy
+    // ALERT  (< 0.30): beep stops — 12s cooldown starts here only
+    //                  after 12s: cooldown clears, next drowsy re-alerts
 
-        if (recovered) {
-          hadAlertRef.current  = true;
-          clearedAtRef.current = 0;
-          _startBeep();
-          onAlert?.(now, composite);
-        }
+    if (composite >= ALERT_THRESHOLD) {
+      // Tick cooldown — if it's done, clear it
+      if (inCooldownRef.current && now - cooldownStartRef.current >= RECOVERY_MS) {
+        inCooldownRef.current    = false;
+        cooldownStartRef.current = 0;
+      }
+
+      if (!isAlertingRef.current && !inCooldownRef.current) {
+        _startBeep();
+        onAlert?.(now, composite);
       }
 
     } else if (composite < ALERT_LEVEL) {
-      // TRULY ALERT — stop beep, start recovery timer
-      _stopBeep();
-      if (hadAlertRef.current && clearedAtRef.current === 0) {
-        clearedAtRef.current = now;
-      } else if (hadAlertRef.current && now - clearedAtRef.current >= RECOVERY_MS) {
-        hadAlertRef.current  = false;
-        clearedAtRef.current = 0;
+      // TRULY ALERT — stop beep and start cooldown if coming off an alert
+      if (isAlertingRef.current) {
+        _stopBeep();
+        inCooldownRef.current    = true;
+        cooldownStartRef.current = now;
+      } else if (inCooldownRef.current) {
+        // Already in cooldown — check if it's expired
+        if (now - cooldownStartRef.current >= RECOVERY_MS) {
+          inCooldownRef.current    = false;
+          cooldownStartRef.current = 0;
+        }
       }
 
     } else {
-      // MILD (0.30–0.55) — stop beep, do NOT start timer
-      _stopBeep();
+      // MILD (0.30–0.55) — stop beep only, no cooldown
+      // Going mild → drowsy re-alerts immediately
+      if (isAlertingRef.current) _stopBeep();
     }
 
     onSignals?.({
