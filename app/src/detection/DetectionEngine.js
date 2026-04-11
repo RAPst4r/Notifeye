@@ -19,6 +19,7 @@ import { useRef, useCallback, useEffect } from "react";
 import { StyleSheet } from "react-native";
 import { WebView } from "react-native-webview";
 import { Audio } from "expo-av";
+import { VolumeManager } from "react-native-volume-manager";
 
 import { DETECTION_HTML } from "./detectionEngineHTML";
 import { PerclosTracker, SustainedClosureDetector } from "../../../model/perclos";
@@ -47,8 +48,9 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
   const clearedAtRef  = useRef(0);
 
   // Audio
-  const soundRef      = useRef(null);
-  const audioReadyRef = useRef(false);
+  const soundRef        = useRef(null);
+  const audioReadyRef   = useRef(false);
+  const savedVolumeRef  = useRef(null); // volume level before alert, restored after
 
   // ── Audio init ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -90,16 +92,36 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
   }, []);
 
   // ── Beep control ────────────────────────────────────────────────────────────
-  function _startBeep() {
+  async function _startBeep() {
     if (isAlertingRef.current || !audioReadyRef.current) return;
     isAlertingRef.current = true;
+
+    // Save current volume and slam to max — like Tile does on ring
+    try {
+      const current = await VolumeManager.getVolume();
+      savedVolumeRef.current = current?.volume ?? 1.0;
+      await VolumeManager.setVolume(1.0, { showUI: false });
+    } catch (e) {
+      console.warn("[Notifeye] Volume boost failed:", e.message);
+    }
+
     soundRef.current?.playAsync().catch(() => {});
   }
 
-  function _stopBeep() {
+  async function _stopBeep() {
     if (!isAlertingRef.current) return;
     isAlertingRef.current = false;
     soundRef.current?.stopAsync().catch(() => {});
+
+    // Restore volume to what it was before the alert
+    try {
+      if (savedVolumeRef.current !== null) {
+        await VolumeManager.setVolume(savedVolumeRef.current, { showUI: false });
+        savedVolumeRef.current = null;
+      }
+    } catch (e) {
+      console.warn("[Notifeye] Volume restore failed:", e.message);
+    }
   }
 
   // ── Frame handler ───────────────────────────────────────────────────────────
