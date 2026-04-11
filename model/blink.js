@@ -32,10 +32,11 @@ const HEAVY_PRUNE_MS        = 600_000; // prune entries older than 10 min
 
 // Rapid blink
 const RAPID_WINDOW_MS       = 15_000;  // 15s window for burst detection
-const RAPID_BLINK_THRESHOLD = 6;       // > 6 blinks in 15s = rapid burst (>24/min)
+const RAPID_BLINK_THRESHOLD = 10;      // > 10 blinks in 15s = rapid burst (>40/min, well above normal 15-20)
 const RAPID_BLINK_MAX       = 5;       // 5 rapid events = score 1.0
 const RAPID_HALF_LIFE_MS    = 60_000;  // decays faster — shorter-term signal
 const RAPID_PRUNE_MS        = 300_000; // prune entries older than 5 min
+const RAPID_EVENT_COOLDOWN  = 10_000;  // min 10s between recording rapid burst events
 
 export class BlinkTracker {
   constructor() {
@@ -51,6 +52,7 @@ export class BlinkTracker {
     // Exponential-decay event logs
     this.heavyBlinkTimestamps = [];
     this.rapidBlinkTimestamps = [];
+    this._lastRapidEventMs    = 0; // prevents recording a burst event on every blink
   }
 
   /** Call once per frame with current EAR and timestamp (ms). */
@@ -111,14 +113,20 @@ export class BlinkTracker {
   }
 
   /**
-   * Rapid burst: > RAPID_BLINK_THRESHOLD blinks in the last 15s.
-   * Records an event timestamp for exponential decay scoring.
+   * Rapid burst: > 10 blinks in 15s (> 40/min — well above normal 15-20/min).
+   * Records ONE event per burst (10s cooldown prevents firing on every blink
+   * while in the rapid state).
    */
   _checkRapid(nowMs) {
-    const cutoff     = nowMs - RAPID_WINDOW_MS;
+    // Cooldown: only record one event per 10s even if still rapidly blinking
+    if (nowMs - this._lastRapidEventMs < RAPID_EVENT_COOLDOWN) return;
+
+    const cutoff      = nowMs - RAPID_WINDOW_MS;
     const recentCount = this.blinkTimestamps.filter((ts) => ts > cutoff).length;
+
     if (recentCount > RAPID_BLINK_THRESHOLD) {
       this.rapidBlinkTimestamps.push(nowMs);
+      this._lastRapidEventMs = nowMs;
     }
   }
 
@@ -187,6 +195,7 @@ export class BlinkTracker {
     this.blinkDurations       = [];
     this.heavyBlinkTimestamps = [];
     this.rapidBlinkTimestamps = [];
+    this._lastRapidEventMs    = 0;
     this._inBlink             = false;
     this._earValues           = [];
     this._earTimes            = [];
