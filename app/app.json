@@ -17,7 +17,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Notifeye uses the front camera to monitor for drowsy driving.",
         "NSMicrophoneUsageDescription": "Microphone access is required by the camera API."
-      }
+      },
+      "bundleIdentifier": "com.anonymous.notifeye"
     },
     "android": {
       "adaptiveIcon": {
@@ -25,10 +26,17 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": ["android.permission.CAMERA"]
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-audio"
+    ]
   }
 }

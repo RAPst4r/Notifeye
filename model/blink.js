@@ -9,7 +9,7 @@
 //    decay (half-life 90s) so it bleeds back to 0 when driver recovers.
 //
 // 2. RAPID BLINKING — fighting to stay awake
-//    Criterion: > 6 blinks in the last 15s (= >24/min). Rapid blinking is a
+//    Criterion: > 8 blinks in the last 15s (= >32/min). Rapid blinking is a
 //    classic microsleep-avoidance behaviour. Score also decays exponentially
 //    (half-life 60s — shorter because it's a shorter-term signal).
 //
@@ -32,11 +32,11 @@ const HEAVY_PRUNE_MS        = 600_000; // prune entries older than 10 min
 
 // Rapid blink
 const RAPID_WINDOW_MS       = 15_000;  // 15s window for burst detection
-const RAPID_BLINK_THRESHOLD = 10;      // > 10 blinks in 15s = rapid burst (>40/min, well above normal 15-20)
+const RAPID_BLINK_THRESHOLD = 7;       // > 7 blinks in 15s = rapid burst (>28/min, above normal 15-20)
 const RAPID_BLINK_MAX       = 5;       // 5 rapid events = score 1.0
 const RAPID_HALF_LIFE_MS    = 60_000;  // decays faster — shorter-term signal
 const RAPID_PRUNE_MS        = 300_000; // prune entries older than 5 min
-const RAPID_EVENT_COOLDOWN  = 10_000;  // min 10s between recording rapid burst events
+const RAPID_EVENT_COOLDOWN  = 5_000;   // min 5s between recording rapid burst events
 
 export class BlinkTracker {
   constructor() {
@@ -113,8 +113,8 @@ export class BlinkTracker {
   }
 
   /**
-   * Rapid burst: > 10 blinks in 15s (> 40/min — well above normal 15-20/min).
-   * Records ONE event per burst (10s cooldown prevents firing on every blink
+   * Rapid burst: > 8 blinks in 15s (> 32/min — above normal 15-20/min).
+   * Records ONE event per burst (6s cooldown prevents firing on every blink
    * while in the rapid state).
    */
   _checkRapid(nowMs) {

@@ -40,8 +40,10 @@ import {
   ALERT_THRESHOLD,
 } from "../../../model/scorer";
 
-const ALERT_LEVEL    = 0.30;   // below this = truly alert, recovery timer starts
-const RECOVERY_MS    = 12_000; // must stay in ALERT zone for 12s before re-alerting
+const ALERT_LEVEL       = 0.30;   // below this = truly alert, recovery timer starts
+const RECOVERY_MS       = 12_000; // must stay in ALERT zone for 12s before re-alerting
+const MEDIA_RESUME_MS   = 1_000;  // buffer after beep stops before other media resumes
+const MIN_RETRIGGER_MS  = 3_000;  // minimum gap between beep end and next beep start
 
 export default function DetectionEngine({ onSignals, onAlert, onStatus, style }) {
   const webViewRef   = useRef(null);
@@ -54,6 +56,7 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
   const isAlertingRef      = useRef(false); // true while beep is looping
   const inCooldownRef      = useRef(false); // true during 12s recovery window
   const cooldownStartRef   = useRef(0);     // timestamp when cooldown began
+  const lastBeepEndRef     = useRef(0);     // timestamp when last beep stopped (for re-trigger gap)
 
   // Audio — useAudioPlayer creates and manages the player lifecycle automatically
   const player         = useAudioPlayer(require("../../assets/beep.wav"));
@@ -65,7 +68,7 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
       try {
         await setAudioModeAsync({
           playsInSilentMode: true,        // bypass iOS mute switch
-          interruptionMode:  "duckOthers",
+          interruptionMode:  "doNotMix",  // pause other media (Spotify, podcasts) when beep plays
         });
         player.loop   = true;             // loop automatically
         player.volume = 1.0;
@@ -102,9 +105,12 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     if (!isAlertingRef.current) return;
     isAlertingRef.current = false;
 
-    try { player.pause(); } catch {}
+    // Mute immediately so user hears silence, but keep audio session active
+    // for MEDIA_RESUME_MS — this gives other media a clean 1s buffer before
+    // iOS releases the session and allows them to resume.
+    try { player.volume = 0; } catch {}
 
-    // Restore saved volume
+    // Restore system volume right away (no need to wait)
     if (_setVolume && savedVolumeRef.current !== null) {
       try {
         await _setVolume(savedVolumeRef.current, { showUI: false });
@@ -113,6 +119,11 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
       }
       savedVolumeRef.current = null;
     }
+
+    setTimeout(() => {
+      try { player.pause(); player.volume = 1.0; } catch {}
+      lastBeepEndRef.current = Date.now();
+    }, MEDIA_RESUME_MS);
   }
 
   // ── Frame handler ───────────────────────────────────────────────────────────
@@ -171,7 +182,8 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
         cooldownStartRef.current = 0;
       }
 
-      if (!isAlertingRef.current && !inCooldownRef.current) {
+      const gapOk = now - lastBeepEndRef.current >= MIN_RETRIGGER_MS;
+      if (!isAlertingRef.current && !inCooldownRef.current && gapOk) {
         _startBeep();
         onAlert?.(now, composite);
       }
