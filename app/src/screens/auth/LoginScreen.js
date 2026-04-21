@@ -14,6 +14,7 @@ import {
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
 import * as AppleAuthentication from "expo-apple-authentication";
+import { makeRedirectUri } from "expo-auth-session";
 import { signIn, resetPassword, signInWithGoogleCredential, signInWithAppleCredential } from "../../firebase/authService";
 import { Colors } from "../../theme/colors";
 
@@ -28,11 +29,16 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(null); // "email" | "google" | "apple" | null
 
+  const redirectUri = makeRedirectUri({ useProxy: true });
+
   const [, , googlePromptAsync] = Google.useAuthRequest({
     iosClientId:     GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
     webClientId:     GOOGLE_WEB_CLIENT_ID,
+    redirectUri,
   });
+
+  console.log("[Google Auth - Login] redirectUri:", redirectUri);
 
   async function handleLogin() {
     if (!email.trim() || !password) {

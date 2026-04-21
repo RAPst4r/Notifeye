@@ -81,7 +81,6 @@ export default function PermissionsScreen({ navigation }) {
   const { user, refreshProfile } = useAuth();
   const [step, setStep]       = useState(0);
   const [loading, setLoading] = useState(false);
-  const [done, setDone]       = useState(false);
 
   const current = PERMISSIONS[step];
   const { Icon } = current;
@@ -103,44 +102,34 @@ export default function PermissionsScreen({ navigation }) {
   }
 
   function advance() {
-    if (step < PERMISSIONS.length - 1) {
-      setStep((s) => s + 1);
+    const nextStep = step + 1;
+    if (nextStep < PERMISSIONS.length) {
+      setStep(nextStep);
     } else {
       finishPermissions();
     }
   }
 
   async function finishPermissions() {
-    setDone(true);
+    navigation.navigate("PlanSelect");
     try {
-      await updateOnboardingStep(user.uid, 10);
-      refreshProfile({ onboardingStep: 10 });
+      await updateOnboardingStep(user.uid, 11);
+      refreshProfile({ onboardingStep: 11 });
     } catch { /* non-blocking */ }
-    navigation.navigate("CameraCalibration");
-  }
-
-  if (done) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator color={Colors.brandBlue} />
-      </View>
-    );
   }
 
   return (
     <View style={styles.container}>
       <OnboardingProgress step={9} />
 
-      <View style={styles.dots}>
-        {PERMISSIONS.map((_, i) => (
-          <View
-            key={i}
-            style={[styles.dot, i === step && styles.dotActive, i < step && styles.dotDone]}
-          />
-        ))}
-      </View>
+      {navigation.canGoBack() && (
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+      )}
 
       <Text style={styles.step}>Step 9 of 13</Text>
+
 
       <View style={styles.iconCircle}>
         <Icon size={44} color={Colors.brandBlue} />
@@ -175,20 +164,26 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgPrimary,
     paddingHorizontal: 28,
     paddingTop: 72,
-    alignItems: "center",
   },
 
-  dots: { flexDirection: "row", gap: 8, marginBottom: 32 },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#1a2a3a",
-  },
-  dotActive: { backgroundColor: Colors.brandBlue, width: 24 },
-  dotDone:   { backgroundColor: Colors.brandBlue + "66" },
+  back:     { marginBottom: 20 },
+  backText: { color: Colors.textMuted, fontSize: 15 },
 
-  step: { color: Colors.textMuted, fontSize: 12, marginBottom: 36, letterSpacing: 1 },
+  step: { color: Colors.textMuted, fontSize: 12, marginBottom: 20, letterSpacing: 1 },
+
+  subTrack: {
+    width: "100%",
+    height: 3,
+    backgroundColor: "#0F1623",
+    borderRadius: 2,
+    marginBottom: 36,
+    overflow: "hidden",
+  },
+  subFill: {
+    height: 3,
+    backgroundColor: Colors.brandBlue,
+    borderRadius: 2,
+  },
 
   iconCircle: {
     width: 100,
@@ -197,6 +192,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgSecondary,
     alignItems: "center",
     justifyContent: "center",
+    alignSelf: "center",
     marginBottom: 32,
     borderWidth: 1.5,
     borderColor: Colors.brandBlue + "44",
@@ -210,11 +206,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
-    width: "100%",
   },
   disabled:       { opacity: 0.35 },
   primaryBtnText: { color: Colors.bgPrimary, fontWeight: "800", fontSize: 16 },
 
-  skipBtn: { marginTop: 16 },
+  skipBtn: { marginTop: 16, alignItems: "center" },
   skipText: { color: Colors.textMuted, fontSize: 14 },
 });

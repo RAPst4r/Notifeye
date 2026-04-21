@@ -276,6 +276,9 @@ export default function CircleSetupScreen({ navigation }) {
       >
         <View style={styles.container}>
           <OnboardingProgress step={7} />
+          <TouchableOpacity onPress={() => setSubState("landing")} style={styles.back}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
           <Text style={styles.step}>Step 7 of 13</Text>
           <Text style={styles.title}>Create your{"\n"}Circle</Text>
           <Text style={styles.subtitle}>Give your circle a name and icon.</Text>
@@ -335,6 +338,9 @@ export default function CircleSetupScreen({ navigation }) {
     return (
       <View style={styles.container}>
         <OnboardingProgress step={7} />
+        <TouchableOpacity onPress={() => setSubState("creating")} style={styles.back}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
         <Text style={styles.step}>Step 7 of 13</Text>
         <Text style={styles.title}>Create your{"\n"}Circle</Text>
         <Text style={styles.subtitle}>Tap a circle to add members.</Text>
@@ -417,6 +423,9 @@ export default function CircleSetupScreen({ navigation }) {
           <PeopleIcon size={44} color={Colors.brandBlue} />
         </View>
 
+        <TouchableOpacity onPress={() => setSubState("created")} style={[styles.back, { alignSelf: "flex-start" }]}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
         <Text style={styles.permTitle}>Find your people</Text>
         <Text style={styles.permBody}>
           Notifeye needs access to your contacts to quickly add members to your{" "}
@@ -449,6 +458,9 @@ export default function CircleSetupScreen({ navigation }) {
       >
         <View style={styles.container}>
           <OnboardingProgress step={7} />
+          <TouchableOpacity onPress={() => setSubState("contacts-perm")} style={styles.back}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
           <Text style={styles.step}>Step 7 of 13</Text>
           <Text style={styles.title}>Add to {activeCircle?.name}</Text>
           <Text style={styles.subtitle}>Invite people to join your circle.</Text>
@@ -572,6 +584,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  back:     { marginBottom: 16 },
+  backText: { color: Colors.textMuted, fontSize: 15 },
   step:     { color: Colors.textMuted, fontSize: 12, marginBottom: 8, letterSpacing: 1 },
   title:    { color: Colors.white, fontSize: 28, fontWeight: "800", lineHeight: 36, marginBottom: 10 },
   subtitle: { color: Colors.textMuted, fontSize: 14, marginBottom: 24 },

@@ -35,6 +35,11 @@ export default function TermsAcceptScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <OnboardingProgress step={12} />
+      {navigation.canGoBack() && (
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+      )}
       <Text style={styles.step}>Step 12 of 13</Text>
       <Text style={styles.title}>Almost there</Text>
       <Text style={styles.subtitle}>
@@ -115,6 +120,8 @@ const styles = StyleSheet.create({
     paddingTop: 72,
     paddingBottom: 32,
   },
+  back:     { marginBottom: 20 },
+  backText: { color: Colors.textMuted, fontSize: 15 },
   step:     { color: Colors.textMuted, fontSize: 12, marginBottom: 8, letterSpacing: 1 },
   title:    { color: Colors.white, fontSize: 28, fontWeight: "800", marginBottom: 10 },
   subtitle: { color: Colors.textMuted, fontSize: 14, marginBottom: 20 },

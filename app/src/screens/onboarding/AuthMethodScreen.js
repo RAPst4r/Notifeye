@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { signInWithGoogleCredential, signInWithAppleCredential } from "../../firebase/authService";
 import OnboardingProgress from "../../components/OnboardingProgress";
@@ -26,16 +27,22 @@ const GOOGLE_WEB_CLIENT_ID     = "9439129388-fqtn0kqjm6d8v3iqsvo4ebubrmiuargh.ap
 
 // Step 3 — AuthEntry: email input + SSO buttons on one screen
 export default function AuthMethodScreen({ navigation, route }) {
-  const { role, firstName, lastName } = route.params;
+  const { firstName, lastName, age } = route.params;
 
   const [email, setEmail]   = useState("");
   const [loading, setLoading] = useState(null); // "google" | "apple" | null
 
-  const [, , googlePromptAsync] = Google.useAuthRequest({
+  const proxyRedirectUri = makeRedirectUri({ useProxy: true });
+
+  const [request, , googlePromptAsync] = Google.useAuthRequest({
     iosClientId:     GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
     webClientId:     GOOGLE_WEB_CLIENT_ID,
+    redirectUri:     proxyRedirectUri,
   });
+
+  // DEBUG — remove once Google SSO is working
+  console.log("[Google Auth] redirectUri:", request?.redirectUri);
 
   // ── Email path: just navigate forward with accumulated params ─────────────
   function handleEmailContinue() {
@@ -45,7 +52,7 @@ export default function AuthMethodScreen({ navigation, route }) {
       return;
     }
     navigation.navigate("PhoneEntry", {
-      role, firstName, lastName,
+      firstName, lastName, age,
       email: trimmed,
       authPath: "email",
     });
@@ -59,10 +66,10 @@ export default function AuthMethodScreen({ navigation, route }) {
       if (result?.type === "success") {
         const idToken = result.authentication?.idToken;
         if (!idToken) throw new Error("No id_token");
-        await signInWithGoogleCredential(idToken, role, firstName, lastName);
+        await signInWithGoogleCredential(idToken, age, firstName, lastName);
         // AuthContext picks up new user — navigate forward with sso path
         navigation.navigate("PhoneEntry", {
-          role, firstName, lastName,
+          firstName, lastName, age,
           email: null,
           authPath: "sso",
         });
@@ -87,9 +94,9 @@ export default function AuthMethodScreen({ navigation, route }) {
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
       });
-      await signInWithAppleCredential(credential.identityToken, role, firstName, lastName);
+      await signInWithAppleCredential(credential.identityToken, age, firstName, lastName);
       navigation.navigate("PhoneEntry", {
-        role, firstName, lastName,
+        firstName, lastName, age,
         email: null,
         authPath: "sso",
       });

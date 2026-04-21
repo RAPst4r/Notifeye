@@ -19,7 +19,6 @@ import PhoneVerifyScreen       from "../screens/onboarding/PhoneVerifyScreen";
 import PermissionsScreen       from "../screens/onboarding/PermissionsScreen";
 import CircleSetupScreen       from "../screens/onboarding/CircleSetupScreen";
 import EmergencyBuddyScreen    from "../screens/onboarding/EmergencyBuddyScreen";
-import CameraCalibrationScreen from "../screens/onboarding/CameraCalibrationScreen";
 import PlanSelectScreen        from "../screens/onboarding/PlanSelectScreen";
 import TermsAcceptScreen       from "../screens/onboarding/TermsAcceptScreen";
 import WelcomeScreen           from "../screens/onboarding/WelcomeScreen";
@@ -43,7 +42,7 @@ const RESUME_SCREEN = {
   7:  "CircleSetup",
   8:  "EmergencyBuddy",
   9:  "Permissions",
-  10: "CameraCalibration",
+  10: "PlanSelect",
   11: "PlanSelect",
   12: "TermsAccept",
   13: "Welcome",
@@ -105,9 +104,8 @@ function OnboardingStack({ initialScreen }) {
     <Stack.Navigator screenOptions={screenOptions} initialRouteName={initialScreen}>
       <Stack.Screen name="CircleSetup"       component={CircleSetupScreen} />
       <Stack.Screen name="EmergencyBuddy"    component={EmergencyBuddyScreen} />
-      <Stack.Screen name="Permissions"       component={PermissionsScreen} />
-      <Stack.Screen name="CameraCalibration" component={CameraCalibrationScreen} />
-      <Stack.Screen name="PlanSelect"        component={PlanSelectScreen} />
+      <Stack.Screen name="Permissions" component={PermissionsScreen} />
+      <Stack.Screen name="PlanSelect"  component={PlanSelectScreen} />
       <Stack.Screen name="TermsAccept"       component={TermsAcceptScreen} />
       <Stack.Screen name="Welcome"           component={WelcomeScreen} />
       <Stack.Screen name="PhoneEntry"        component={PhoneEntryScreen} />

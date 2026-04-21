@@ -97,6 +97,11 @@ export default function PlanSelectScreen({ navigation }) {
       showsVerticalScrollIndicator={false}
     >
       <OnboardingProgress step={11} />
+      {navigation.canGoBack() && (
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+      )}
       <Text style={styles.step}>Step 11 of 13</Text>
       <Text style={styles.title}>Choose your{"\n"}plan</Text>
       <Text style={styles.subtitle}>You can upgrade or downgrade at any time.</Text>
@@ -166,6 +171,8 @@ const styles = StyleSheet.create({
     paddingTop: 72,
     paddingBottom: 48,
   },
+  back:     { marginBottom: 20 },
+  backText: { color: Colors.textMuted, fontSize: 15 },
   step:     { color: Colors.textMuted, fontSize: 12, marginBottom: 8, letterSpacing: 1 },
   title:    { color: Colors.white, fontSize: 28, fontWeight: "800", lineHeight: 36, marginBottom: 10 },
   subtitle: { color: Colors.textMuted, fontSize: 14, marginBottom: 28 },

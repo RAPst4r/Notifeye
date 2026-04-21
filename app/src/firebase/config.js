@@ -24,4 +24,10 @@ export const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
 
+// Bypass reCAPTCHA in Expo Go (dev). In a real build, Firebase uses
+// silent push (APNs/FCM) so reCAPTCHA never appears anyway.
+if (__DEV__) {
+  auth.settings.appVerificationDisabledForTesting = true;
+}
+
 export const db = getFirestore(app);

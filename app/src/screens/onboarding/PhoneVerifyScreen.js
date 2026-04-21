@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { updateUserProfile } from "../../firebase/firestoreService";
 import OnboardingProgress from "../../components/OnboardingProgress";
+import DismissKeyboard from "../../components/DismissKeyboard";
 import { Colors } from "../../theme/colors";
 
 const RESEND_COOLDOWN = 60;
@@ -19,7 +20,7 @@ const RESEND_COOLDOWN = 60;
 // authPath === "email"  → after verify go to PasswordCreate (account not yet created)
 // authPath === "sso"    → after verify go to CircleSetup   (account already exists)
 export default function PhoneVerifyScreen({ navigation, route }) {
-  const { role, firstName, lastName, email, authPath, phone, confirmation } = route.params;
+  const { firstName, lastName, age, email, authPath, phone, confirmation } = route.params;
   const { user, refreshProfile } = useAuth();
 
   const [code, setCode]       = useState("");
@@ -53,7 +54,7 @@ export default function PhoneVerifyScreen({ navigation, route }) {
       } else {
         // Email path — go create the password + account next
         navigation.navigate("PasswordCreate", {
-          role, firstName, lastName, email, phone,
+          firstName, lastName, age, email, phone,
         });
       }
     } catch (err) {
@@ -74,7 +75,7 @@ export default function PhoneVerifyScreen({ navigation, route }) {
   }, [code]);
 
   return (
-    <View style={styles.container}>
+    <DismissKeyboard style={styles.container}>
       <OnboardingProgress step={5} />
 
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
@@ -119,7 +120,7 @@ export default function PhoneVerifyScreen({ navigation, route }) {
       >
         <Text style={styles.primaryBtnText}>Verify →</Text>
       </TouchableOpacity>
-    </View>
+    </DismissKeyboard>
   );
 }
 

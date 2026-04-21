@@ -19,15 +19,20 @@ import { Colors } from "../../theme/colors";
 // Step 6 — email path only.
 // Creates the Firebase Auth account + Firestore profile with all accumulated params.
 export default function PasswordCreateScreen({ navigation, route }) {
-  const { role, firstName, lastName, email, phone } = route.params;
+  const { firstName, lastName, age, email, phone } = route.params;
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm]   = useState("");
   const [loading, setLoading]   = useState(false);
-  const [showPw, setShowPw]     = useState(false);
-  const [showCfm, setShowCfm]   = useState(false);
 
-  const isStrong  = password.length >= 8;
+  const rules = {
+    length:  password.length >= 8,
+    upper:   /[A-Z]/.test(password),
+    lower:   /[a-z]/.test(password),
+    number:  /[0-9]/.test(password),
+    symbol:  /[^A-Za-z0-9]/.test(password),
+  };
+  const isStrong  = Object.values(rules).every(Boolean);
   const matches   = password === confirm && confirm.length > 0;
   const canSubmit = isStrong && matches;
 
@@ -36,7 +41,7 @@ export default function PasswordCreateScreen({ navigation, route }) {
     setLoading(true);
     try {
       // Creates Firebase Auth account + initial Firestore profile
-      const firebaseUser = await signUp(email, password, firstName, role);
+      const firebaseUser = await signUp(email, password, firstName, age);
 
       // Backfill fields that weren't available at account creation
       await updateUserProfile(firebaseUser.uid, {
@@ -71,42 +76,47 @@ export default function PasswordCreateScreen({ navigation, route }) {
         <Text style={styles.emailHint}>{email}</Text>
 
         {/* Password */}
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            placeholder="Password (min 8 characters)"
-            placeholderTextColor={Colors.textMuted}
-            secureTextEntry={!showPw}
-            value={password}
-            onChangeText={setPassword}
-            returnKeyType="next"
-          />
-          <TouchableOpacity onPress={() => setShowPw((v) => !v)} style={styles.eyeBtn}>
-            <Text style={styles.eyeText}>{showPw ? "🙈" : "👁"}</Text>
-          </TouchableOpacity>
-        </View>
+        <TextInput
+          style={styles.input}
+          placeholder="Password (min 8 characters)"
+          placeholderTextColor={Colors.textMuted}
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+          returnKeyType="next"
+        />
         {password.length > 0 && (
-          <Text style={[styles.hint, isStrong ? styles.hintOk : styles.hintWarn]}>
-            {isStrong ? "✓ Strong enough" : `${8 - password.length} more character${8 - password.length !== 1 ? "s" : ""} needed`}
-          </Text>
+          <View style={styles.rulesBox}>
+            {[
+              { key: "length", label: "At least 8 characters" },
+              { key: "upper",  label: "One uppercase letter" },
+              { key: "lower",  label: "One lowercase letter" },
+              { key: "number", label: "One number" },
+              { key: "symbol", label: "One symbol (!@#$...)" },
+            ].map(({ key, label }) => (
+              <View key={key} style={styles.ruleRow}>
+                <Text style={rules[key] ? styles.ruleOk : styles.ruleFail}>
+                  {rules[key] ? "✓" : "✗"}
+                </Text>
+                <Text style={[styles.ruleLabel, rules[key] && styles.ruleLabelOk]}>
+                  {label}
+                </Text>
+              </View>
+            ))}
+          </View>
         )}
 
         {/* Confirm */}
-        <View style={[styles.inputRow, { marginTop: 12 }]}>
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm password"
-            placeholderTextColor={Colors.textMuted}
-            secureTextEntry={!showCfm}
-            value={confirm}
-            onChangeText={setConfirm}
-            onSubmitEditing={handleCreate}
-            returnKeyType="done"
-          />
-          <TouchableOpacity onPress={() => setShowCfm((v) => !v)} style={styles.eyeBtn}>
-            <Text style={styles.eyeText}>{showCfm ? "🙈" : "👁"}</Text>
-          </TouchableOpacity>
-        </View>
+        <TextInput
+          style={[styles.input, { marginTop: 12 }]}
+          placeholder="Confirm password"
+          placeholderTextColor={Colors.textMuted}
+          secureTextEntry
+          value={confirm}
+          onChangeText={setConfirm}
+          onSubmitEditing={handleCreate}
+          returnKeyType="done"
+        />
         {confirm.length > 0 && !matches && (
           <Text style={styles.hintWarn}>Passwords don't match</Text>
         )}
@@ -156,27 +166,31 @@ const styles = StyleSheet.create({
   title:     { color: Colors.white, fontSize: 28, fontWeight: "800", lineHeight: 36, marginBottom: 6 },
   emailHint: { color: Colors.textMuted, fontSize: 13, marginBottom: 28 },
 
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  input: {
     backgroundColor: Colors.bgSecondary,
     borderWidth: 1.5,
     borderColor: "#1a2a3a",
     borderRadius: 14,
-    marginBottom: 4,
-  },
-  input: {
-    flex: 1,
     color: Colors.white,
     fontSize: 15,
     paddingHorizontal: 18,
     paddingVertical: 16,
+    marginBottom: 4,
   },
-  eyeBtn:   { paddingHorizontal: 14 },
-  eyeText:  { fontSize: 17 },
-  hint:     { fontSize: 12, marginBottom: 4, marginLeft: 4 },
-  hintOk:   { color: Colors.safe },
-  hintWarn: { color: Colors.mild },
+  rulesBox: {
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#1a2a3a",
+    padding: 12,
+    marginBottom: 4,
+    gap: 6,
+  },
+  ruleRow:      { flexDirection: "row", alignItems: "center", gap: 8 },
+  ruleOk:       { color: Colors.safe,  fontSize: 12, fontWeight: "700", width: 14 },
+  ruleFail:     { color: Colors.textMuted, fontSize: 12, fontWeight: "700", width: 14 },
+  ruleLabel:    { color: Colors.textMuted, fontSize: 12 },
+  ruleLabelOk:  { color: Colors.white },
 
   primaryBtn: {
     backgroundColor: Colors.brandBlue,
