@@ -193,7 +193,7 @@ export default function LoginScreen({ navigation }) {
 
         <TouchableOpacity
           style={styles.secondaryBtn}
-          onPress={() => navigation.navigate("RoleSelect")}
+          onPress={() => navigation.navigate("NameEntry")}
         >
           <Text style={styles.secondaryBtnText}>Create account →</Text>
         </TouchableOpacity>

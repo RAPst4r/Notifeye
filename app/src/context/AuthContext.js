@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "../firebase/config";
 import { getUserProfile, updateUserProfile } from "../firebase/firestoreService";
 import { registerForPushNotifications } from "../firebase/notificationService";
@@ -14,17 +14,16 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        setUser(firebaseUser);
-        let p = await getUserProfile(firebaseUser.uid);
+        const p = await getUserProfile(firebaseUser.uid);
 
-        // ── Migrate pre-onboarding-rebuild accounts ───────────────────────────
-        // Old accounts have a role but no onboardingComplete flag.
-        // Silently mark them as complete so they go straight to the app.
-        if (p?.role && !p?.onboardingComplete) {
-          await updateUserProfile(firebaseUser.uid, { onboardingComplete: true });
-          p = { ...p, onboardingComplete: true };
+        // Auth account exists but no Firestore profile — orphaned account from
+        // a failed signup or old test run. Sign out so the user can start fresh.
+        if (!p) {
+          await signOut(auth);
+          return;
         }
 
+        setUser(firebaseUser);
         setProfile(p);
 
         // Register push token only once onboarding is done

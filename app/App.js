@@ -7,7 +7,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { AuthProvider } from "./src/context/AuthContext";
 
 // ── Onboarding screens ────────────────────────────────────────────────────────
-import RoleSelectScreen        from "./src/screens/onboarding/RoleSelectScreen";
+import AgeScreen               from "./src/screens/onboarding/AgeScreen";
 import NameEntryScreen         from "./src/screens/onboarding/NameEntryScreen";
 import AuthMethodScreen        from "./src/screens/onboarding/AuthMethodScreen";
 import PhoneEntryScreen        from "./src/screens/onboarding/PhoneEntryScreen";
@@ -39,8 +39,8 @@ function OnboardingTestApp() {
       <AuthProvider>
         <NavigationContainer>
           <Stack.Navigator screenOptions={screenOptions}>
-            <Stack.Screen name="RoleSelect"        component={RoleSelectScreen} />
             <Stack.Screen name="NameEntry"         component={NameEntryScreen} />
+            <Stack.Screen name="AgeEntry"          component={AgeScreen} />
             <Stack.Screen name="AuthEntry"         component={AuthMethodScreen} />
             <Stack.Screen name="PhoneEntry"        component={PhoneEntryScreen} />
             <Stack.Screen name="PhoneVerify"       component={PhoneVerifyScreen} />
@@ -84,8 +84,8 @@ function ProductionApp() {
 }
 
 // ── Swap this line when done testing ─────────────────────────────────────────
-export default OnboardingTestApp;
-// export default ProductionApp;
+// export default OnboardingTestApp;
+export default ProductionApp;
 
 const styles = StyleSheet.create({
   root: {

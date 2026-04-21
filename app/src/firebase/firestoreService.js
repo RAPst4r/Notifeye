@@ -6,11 +6,17 @@ import {
   serverTimestamp,
   arrayUnion,
 } from "firebase/firestore";
+
+// Safe upsert — creates the document if it doesn't exist, merges if it does.
+// Use this instead of updateDoc anywhere the document might not exist yet.
+async function upsertUserProfile(uid, updates) {
+  await setDoc(doc(db, "users", uid), updates, { merge: true });
+}
 import { db } from "./config";
 
 // ── User profile ──────────────────────────────────────────────────────────────
 
-export async function createUserProfile(uid, { email, name, lastName, role, ssoProvider }) {
+export async function createUserProfile(uid, { email, name, lastName, age, ssoProvider }) {
   const inviteCode = generateInviteCode(uid);
 
   await setDoc(doc(db, "users", uid), {
@@ -18,7 +24,7 @@ export async function createUserProfile(uid, { email, name, lastName, role, ssoP
     email:              email ?? "",
     name:               name ?? "",
     lastName:           lastName ?? "",
-    role:               role ?? null,       // "driver" | "parent" | "other" | null
+    age:                age ?? null,
     ssoProvider:        ssoProvider ?? null, // "google" | "apple" | null
     subscriptionTier:   "free",
     linkedUserIds:      [],
@@ -52,42 +58,41 @@ export async function getUserProfile(uid) {
 }
 
 export async function updateUserProfile(uid, updates) {
-  await updateDoc(doc(db, "users", uid), updates);
+  await upsertUserProfile(uid, updates);
 }
 
 // ── Onboarding step helpers ───────────────────────────────────────────────────
 
 export async function updateOnboardingStep(uid, step) {
-  await updateDoc(doc(db, "users", uid), { onboardingStep: step });
+  await upsertUserProfile(uid, { onboardingStep: step });
 }
 
 export async function savePhoneVerified(uid, phoneNumber) {
-  await updateDoc(doc(db, "users", uid), {
+  await upsertUserProfile(uid, {
     phoneNumber,
     phoneVerified: true,
-    onboardingStep: 5,   // advance to Permissions
+    onboardingStep: 7,
   });
 }
 
 export async function saveEmergencyBuddy(uid, buddy) {
-  // buddy: { name, phone, contactId }
-  await updateDoc(doc(db, "users", uid), {
+  await upsertUserProfile(uid, {
     emergencyBuddy: buddy,
-    onboardingStep: 9,   // advance to Permissions
+    onboardingStep: 9,
   });
 }
 
 export async function saveCameraMount(uid, position) {
-  await updateDoc(doc(db, "users", uid), {
+  await upsertUserProfile(uid, {
     cameraMountPosition: position,
-    onboardingStep: 11,  // advance to PlanSelect
+    onboardingStep: 11,
   });
 }
 
 export async function completeOnboarding(uid) {
-  await updateDoc(doc(db, "users", uid), {
+  await upsertUserProfile(uid, {
     onboardingComplete: true,
-    onboardingStep:     11,
+    onboardingStep:     13,
     termsAcceptedAt:    serverTimestamp(),
   });
 }

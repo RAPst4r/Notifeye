@@ -24,7 +24,6 @@ export default function TermsAcceptScreen({ navigation }) {
     setSaving(true);
     try {
       await completeOnboarding(user.uid);
-      refreshProfile({ onboardingComplete: true, onboardingStep: 11 });
       navigation.navigate("Welcome");
     } catch {
       Alert.alert("Error", "Could not save. Please try again.");

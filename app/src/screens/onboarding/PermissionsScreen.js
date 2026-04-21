@@ -6,18 +6,54 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
+import Svg, { Path, Circle, Rect } from "react-native-svg";
 import { Camera } from "expo-camera";
-import * as Contacts from "expo-contacts";
 import * as Notifications from "expo-notifications";
 import { updateOnboardingStep } from "../../firebase/firestoreService";
 import { useAuth } from "../../context/AuthContext";
 import OnboardingProgress from "../../components/OnboardingProgress";
 import { Colors } from "../../theme/colors";
 
+function CameraIcon({ size = 44, color = Colors.brandBlue }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx="12" cy="13" r="4" stroke={color} strokeWidth={1.5} />
+    </Svg>
+  );
+}
+
+function BellIcon({ size = 44, color = Colors.brandBlue }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M13.73 21a2 2 0 0 1-3.46 0"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 const PERMISSIONS = [
   {
     id: "camera",
-    icon: "📷",
+    Icon: CameraIcon,
     title: "Camera access",
     description:
       "Notifeye uses your front camera to monitor eye activity while you drive. It never records video.",
@@ -28,20 +64,8 @@ const PERMISSIONS = [
     },
   },
   {
-    id: "contacts",
-    icon: "👥",
-    title: "Contacts access",
-    description:
-      "We use your contacts so you can quickly invite your circle and choose an emergency buddy.",
-    cta: "Enable Contacts",
-    request: async () => {
-      const { status } = await Contacts.requestPermissionsAsync();
-      return status === "granted";
-    },
-  },
-  {
     id: "notifications",
-    icon: "🔔",
+    Icon: BellIcon,
     title: "Notifications",
     description:
       "So your family gets notified the moment you start a drive or if an alert is detected.",
@@ -55,11 +79,12 @@ const PERMISSIONS = [
 
 export default function PermissionsScreen({ navigation }) {
   const { user, refreshProfile } = useAuth();
-  const [step, setStep]       = useState(0);   // index into PERMISSIONS
+  const [step, setStep]       = useState(0);
   const [loading, setLoading] = useState(false);
   const [done, setDone]       = useState(false);
 
   const current = PERMISSIONS[step];
+  const { Icon } = current;
 
   async function handleGrant() {
     setLoading(true);
@@ -88,8 +113,8 @@ export default function PermissionsScreen({ navigation }) {
   async function finishPermissions() {
     setDone(true);
     try {
-      await updateOnboardingStep(user.uid, 6);
-      refreshProfile({ onboardingStep: 6 });
+      await updateOnboardingStep(user.uid, 10);
+      refreshProfile({ onboardingStep: 10 });
     } catch { /* non-blocking */ }
     navigation.navigate("CameraCalibration");
   }
@@ -104,7 +129,6 @@ export default function PermissionsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Progress dots */}
       <OnboardingProgress step={9} />
 
       <View style={styles.dots}>
@@ -119,7 +143,7 @@ export default function PermissionsScreen({ navigation }) {
       <Text style={styles.step}>Step 9 of 13</Text>
 
       <View style={styles.iconCircle}>
-        <Text style={styles.icon}>{current.icon}</Text>
+        <Icon size={44} color={Colors.brandBlue} />
       </View>
 
       <Text style={styles.title}>{current.title}</Text>
@@ -177,7 +201,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.brandBlue + "44",
   },
-  icon: { fontSize: 44 },
 
   title:       { color: Colors.white, fontSize: 22, fontWeight: "800", marginBottom: 14, textAlign: "center" },
   description: { color: Colors.textMuted, fontSize: 14, lineHeight: 22, textAlign: "center", marginBottom: 48, paddingHorizontal: 8 },

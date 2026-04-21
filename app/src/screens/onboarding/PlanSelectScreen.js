@@ -68,7 +68,7 @@ export default function PlanSelectScreen({ navigation }) {
   async function handleContinue() {
     setSaving(true);
     try {
-      const updates = { subscriptionTier: selected, onboardingStep: 10 };
+      const updates = { subscriptionTier: selected, onboardingStep: 12 };
       await updateUserProfile(user.uid, updates);
       refreshProfile(updates);
 
@@ -82,7 +82,8 @@ export default function PlanSelectScreen({ navigation }) {
       } else {
         navigation.navigate("TermsAccept");
       }
-    } catch {
+    } catch (err) {
+      console.error("[PlanSelect] save failed:", err);
       Alert.alert("Error", "Could not save plan selection. Please try again.");
     } finally {
       setSaving(false);

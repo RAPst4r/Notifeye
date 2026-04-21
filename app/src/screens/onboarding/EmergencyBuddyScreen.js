@@ -50,7 +50,7 @@ export default function EmergencyBuddyScreen({ navigation }) {
         contactId: selected.id,
       };
       await saveEmergencyBuddy(user.uid, buddy);
-      refreshProfile({ emergencyBuddy: buddy, onboardingStep: 8 });
+      refreshProfile({ emergencyBuddy: buddy, onboardingStep: 9 });
       navigation.navigate("Permissions");
     } catch {
       Alert.alert("Error", "Could not save emergency buddy. Please try again.");

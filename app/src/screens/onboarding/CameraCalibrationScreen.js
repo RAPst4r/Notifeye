@@ -49,7 +49,7 @@ export default function CameraCalibrationScreen({ navigation }) {
     setSaving(true);
     try {
       await saveCameraMount(user.uid, selected);
-      refreshProfile({ cameraMountPosition: selected, onboardingStep: 9 });
+      refreshProfile({ cameraMountPosition: selected, onboardingStep: 11 });
       navigation.navigate("PlanSelect");
     } catch {
       Alert.alert("Error", "Could not save your mount position. Please try again.");

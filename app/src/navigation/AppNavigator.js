@@ -9,7 +9,7 @@ import LoginScreen  from "../screens/auth/LoginScreen";
 import SignUpScreen from "../screens/auth/SignUpScreen";
 
 // Onboarding screens
-import RoleSelectScreen        from "../screens/onboarding/RoleSelectScreen";
+import AgeScreen               from "../screens/onboarding/AgeScreen";
 import AuthMethodScreen        from "../screens/onboarding/AuthMethodScreen";
 import EmailEntryScreen        from "../screens/onboarding/EmailEntryScreen";
 import PasswordCreateScreen    from "../screens/onboarding/PasswordCreateScreen";
@@ -73,27 +73,20 @@ export default function AppNavigator() {
             <Stack.Screen name="Login"   component={LoginScreen} />
             <Stack.Screen name="SignUp"  component={SignUpScreen} />
             {/* Pre-auth onboarding (role select + account creation) */}
-            <Stack.Screen name="RoleSelect"     component={RoleSelectScreen} />
+            <Stack.Screen name="NameEntry"      component={NameEntryScreen} />
+            <Stack.Screen name="AgeEntry"       component={AgeScreen} />
             <Stack.Screen name="AuthEntry"      component={AuthMethodScreen} />
             <Stack.Screen name="EmailEntry"     component={EmailEntryScreen} />
+            <Stack.Screen name="PhoneEntry"     component={PhoneEntryScreen} />
+            <Stack.Screen name="PhoneVerify"    component={PhoneVerifyScreen} />
             <Stack.Screen name="PasswordCreate" component={PasswordCreateScreen} />
           </>
         ) : needsOnboarding ? (
           // ── Onboarding stack (post-auth) ──────────────────────────────────────
-          // Initial screen is derived from their saved onboardingStep (drop-off recovery)
-          <Stack.Group>
-            <Stack.Screen name={resumeScreen}      component={screenForName(resumeScreen)} />
-            <Stack.Screen name="NameEntry"         component={NameEntryScreen} />
-            <Stack.Screen name="PhoneEntry"        component={PhoneEntryScreen} />
-            <Stack.Screen name="PhoneVerify"       component={PhoneVerifyScreen} />
-            <Stack.Screen name="Permissions"       component={PermissionsScreen} />
-            <Stack.Screen name="CircleSetup"       component={CircleSetupScreen} />
-            <Stack.Screen name="EmergencyBuddy"    component={EmergencyBuddyScreen} />
-            <Stack.Screen name="CameraCalibration" component={CameraCalibrationScreen} />
-            <Stack.Screen name="PlanSelect"        component={PlanSelectScreen} />
-            <Stack.Screen name="TermsAccept"       component={TermsAcceptScreen} />
-            <Stack.Screen name="Welcome"           component={WelcomeScreen} />
-          </Stack.Group>
+          <Stack.Screen
+            name="OnboardingFlow"
+            children={() => <OnboardingStack initialScreen={resumeScreen} />}
+          />
         ) : (
           // ── Main app stack ────────────────────────────────────────────────────
           <>
@@ -107,21 +100,19 @@ export default function AppNavigator() {
   );
 }
 
-// Helper: map screen name → component for the dynamic initialRouteName screen
-const SCREEN_COMPONENTS = {
-  NameEntry:         NameEntryScreen,
-  PhoneEntry:        PhoneEntryScreen,
-  PhoneVerify:       PhoneVerifyScreen,
-  Permissions:       PermissionsScreen,
-  CircleSetup:       CircleSetupScreen,
-  EmergencyBuddy:    EmergencyBuddyScreen,
-  CameraCalibration: CameraCalibrationScreen,
-  PlanSelect:        PlanSelectScreen,
-  TermsAccept:       TermsAcceptScreen,
-  Welcome:           WelcomeScreen,
-};
-
-function screenForName(name) {
-  return SCREEN_COMPONENTS[name] ?? NameEntryScreen;
+function OnboardingStack({ initialScreen }) {
+  return (
+    <Stack.Navigator screenOptions={screenOptions} initialRouteName={initialScreen}>
+      <Stack.Screen name="CircleSetup"       component={CircleSetupScreen} />
+      <Stack.Screen name="EmergencyBuddy"    component={EmergencyBuddyScreen} />
+      <Stack.Screen name="Permissions"       component={PermissionsScreen} />
+      <Stack.Screen name="CameraCalibration" component={CameraCalibrationScreen} />
+      <Stack.Screen name="PlanSelect"        component={PlanSelectScreen} />
+      <Stack.Screen name="TermsAccept"       component={TermsAcceptScreen} />
+      <Stack.Screen name="Welcome"           component={WelcomeScreen} />
+      <Stack.Screen name="PhoneEntry"        component={PhoneEntryScreen} />
+      <Stack.Screen name="PhoneVerify"       component={PhoneVerifyScreen} />
+    </Stack.Navigator>
+  );
 }
 
