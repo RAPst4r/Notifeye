@@ -11,21 +11,21 @@ import { Colors } from "../../theme/colors";
 
 const ROLES = [
   {
-    id: "driver",
+    id: "parent",
+    icon: "👨‍👧",
+    label: "Parent",
+    description: "Stay notified when a teen driver in your circle needs attention.",
+  },
+  {
+    id: "teen",
     icon: "🚗",
-    label: "Driver",
+    label: "Teen",
     description: "Get real-time drowsiness alerts while you drive.",
   },
   {
-    id: "parent",
-    icon: "👨‍👧",
-    label: "Parent / Guardian",
-    description: "Stay notified when a driver you're linked to needs attention.",
-  },
-  {
-    id: "other",
+    id: "relation",
     icon: "🤝",
-    label: "Family / Friend",
+    label: "Relation",
     description: "Watch over someone in your circle — a sibling, partner, or friend.",
   },
 ];

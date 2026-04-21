@@ -13,9 +13,9 @@ import { removePushToken } from "./notificationService";
 
 // ── Email / Password ──────────────────────────────────────────────────────────
 
-export async function signUp(email, password, name, role) {
+export async function signUp(email, password, name, age) {
   const credential = await createUserWithEmailAndPassword(auth, email, password);
-  await createUserProfile(credential.user.uid, { email, name, lastName: "", role, ssoProvider: null });
+  await createUserProfile(credential.user.uid, { email, name, lastName: "", age, ssoProvider: null });
   return credential.user;
 }
 
@@ -40,7 +40,7 @@ export async function resetPassword(email) {
 // role is passed from RoleSelectScreen and only used for new users.
 // firstName/lastName come from NameEntryScreen (step 2) and take priority over
 // whatever Google returns, since the user typed them explicitly.
-export async function signInWithGoogleCredential(idToken, role, firstName, lastName) {
+export async function signInWithGoogleCredential(idToken, age, firstName, lastName) {
   const credential = GoogleAuthProvider.credential(idToken);
   const result = await signInWithCredential(auth, credential);
 
@@ -52,7 +52,7 @@ export async function signInWithGoogleCredential(idToken, role, firstName, lastN
       email:       result.user.email ?? "",
       name:        resolvedFirst,
       lastName:    resolvedLast,
-      role,
+      age,
       ssoProvider: "google",
     });
   }
@@ -64,7 +64,7 @@ export async function signInWithGoogleCredential(idToken, role, firstName, lastN
 
 // Called from AuthMethodScreen after AppleAuthentication.signInAsync().
 // fullName is the Apple credential fullName object (only provided on first sign-in).
-export async function signInWithAppleCredential(identityToken, role, firstName, lastName) {
+export async function signInWithAppleCredential(identityToken, age, firstName, lastName) {
   const provider = new OAuthProvider("apple.com");
   const credential = provider.credential({ idToken: identityToken });
   const result = await signInWithCredential(auth, credential);
@@ -75,7 +75,7 @@ export async function signInWithAppleCredential(identityToken, role, firstName, 
       email:       result.user.email ?? "",
       name:        firstName ?? "",
       lastName:    lastName ?? "",
-      role,
+      age,
       ssoProvider: "apple",
     });
   }

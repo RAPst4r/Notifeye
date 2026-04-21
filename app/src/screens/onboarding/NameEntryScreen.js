@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  View,
   Text,
   TextInput,
   TouchableOpacity,
@@ -12,9 +11,8 @@ import {
 import OnboardingProgress from "../../components/OnboardingProgress";
 import { Colors } from "../../theme/colors";
 
-// Step 2 — collected pre-auth, passed as nav params
-export default function NameEntryScreen({ navigation, route }) {
-  const { role } = route.params;
+// Step 1 — collected pre-auth, passed as nav params
+export default function NameEntryScreen({ navigation }) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName]   = useState("");
 
@@ -26,13 +24,13 @@ export default function NameEntryScreen({ navigation, route }) {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
-        <OnboardingProgress step={2} />
+        <OnboardingProgress step={1} />
 
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 
-        <Text style={styles.stepLabel}>Step 2 of 13</Text>
+        <Text style={styles.stepLabel}>Step 1 of 13</Text>
         <Text style={styles.title}>What's your{"\n"}name?</Text>
 
         <TextInput
@@ -58,8 +56,7 @@ export default function NameEntryScreen({ navigation, route }) {
         <TouchableOpacity
           style={[styles.primaryBtn, !canSubmit && styles.disabled]}
           onPress={() =>
-            navigation.navigate("AuthEntry", {
-              role,
+            navigation.navigate("AgeEntry", {
               firstName: firstName.trim(),
               lastName:  lastName.trim(),
             })

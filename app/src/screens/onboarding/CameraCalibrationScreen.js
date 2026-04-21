@@ -63,6 +63,11 @@ export default function CameraCalibrationScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <OnboardingProgress step={10} />
+      {navigation.canGoBack() && (
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+      )}
       <Text style={styles.step}>Step 10 of 13</Text>
       <Text style={styles.title}>Where is your{"\n"}phone mounted?</Text>
       <Text style={styles.subtitle}>
@@ -121,6 +126,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingTop: 72,
   },
+  back:     { marginBottom: 20 },
+  backText: { color: Colors.textMuted, fontSize: 15 },
   step:     { color: Colors.textMuted, fontSize: 12, marginBottom: 8, letterSpacing: 1 },
   title:    { color: Colors.white, fontSize: 28, fontWeight: "800", lineHeight: 36, marginBottom: 10 },
   subtitle: { color: Colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: 28 },
