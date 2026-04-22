@@ -15,7 +15,7 @@ import {
 } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import * as Contacts from "expo-contacts";
-import { updateOnboardingStep } from "../../firebase/firestoreService";
+import { updateOnboardingStep, saveCircles } from "../../firebase/firestoreService";
 import { useAuth } from "../../context/AuthContext";
 import OnboardingProgress from "../../components/OnboardingProgress";
 import { Colors } from "../../theme/colors";
@@ -43,11 +43,14 @@ function PeopleIcon({ size = 52, color = Colors.brandBlue }) {
 }
 
 export default function CircleSetupScreen({ navigation }) {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
+
+  const savedCircles = profile?.circles ?? [];
 
   // ── Sub-state machine ─────────────────────────────────────────────────────
-  const [subState, setSubState] = useState("landing");
-  // "landing" | "creating" | "created" | "contacts-perm" | "invite"
+  // Skip straight to the list if circles were already created this session
+  const [subState, setSubState] = useState(savedCircles.length > 0 ? "created" : "landing");
+  // "landing" | "ready" | "creating" | "created" | "contacts-perm" | "invite"
 
   // ── Animation ─────────────────────────────────────────────────────────────
   const sheetY    = useRef(new Animated.Value(500)).current;
@@ -55,7 +58,7 @@ export default function CircleSetupScreen({ navigation }) {
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
   // ── Circles ───────────────────────────────────────────────────────────────
-  const [circles, setCircles]         = useState([]);
+  const [circles, setCircles]         = useState(savedCircles);
   const [highlightId, setHighlightId] = useState(null);
 
   // ── Creation form ─────────────────────────────────────────────────────────
@@ -106,13 +109,13 @@ export default function CircleSetupScreen({ navigation }) {
     navigation.navigate("EmergencyBuddy");
   }
 
-  // ── Dismiss sheet then enter creation ────────────────────────────────────
+  // ── Dismiss sheet then reveal the + button ───────────────────────────────
   function handleCreateFirst() {
     Animated.parallel([
       Animated.timing(sheetY, { toValue: 500, duration: 250, useNativeDriver: true }),
       Animated.timing(bgDim, { toValue: 1, duration: 250, useNativeDriver: true }),
     ]).start(() => {
-      requestAnimationFrame(() => setSubState("creating"));
+      requestAnimationFrame(() => setSubState("ready"));
     });
   }
 
@@ -121,10 +124,14 @@ export default function CircleSetupScreen({ navigation }) {
     const name = circleName.trim();
     if (!name) return;
     const newCircle = { id: Date.now().toString(), name, emoji: circleEmoji, members: [] };
-    setCircles((prev) => [...prev, newCircle]);
+    const updated = [...circles, newCircle];
+    setCircles(updated);
     setHighlightId(newCircle.id);
     setCircleName("");
     setCircleEmoji("🏠");
+    saveCircles(user.uid, updated).then(() =>
+      refreshProfile({ circles: updated })
+    ).catch(() => {});
     requestAnimationFrame(() => {
       setSubState("created");
       triggerPulse();
@@ -265,6 +272,40 @@ export default function CircleSetupScreen({ navigation }) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // RENDER: Ready — sheet dismissed, + button is tappable
+  // ─────────────────────────────────────────────────────────────────────────
+  if (subState === "ready") {
+    return (
+      <View style={styles.container}>
+        <OnboardingProgress step={7} />
+        <Text style={styles.step}>Step 7 of 13</Text>
+        <Text style={styles.title}>Create your{"\n"}Circle</Text>
+        <Text style={styles.subtitle}>Tap the + to create your first circle.</Text>
+
+        <TouchableOpacity
+          style={styles.emptyRingWrap}
+          onPress={() => setSubState("creating")}
+          activeOpacity={0.7}
+        >
+          <View style={styles.emptyRing}>
+            <Text style={styles.emptyRingPlus}>+</Text>
+          </View>
+          <Text style={styles.emptyRingLabel}>No circles yet. Tap to get started.</Text>
+        </TouchableOpacity>
+
+        <View style={styles.bottomArea}>
+          <TouchableOpacity style={[styles.primaryBtn, styles.disabled]} disabled>
+            <Text style={styles.primaryBtnText}>+ Create a Circle</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onNext} style={styles.skipBtn}>
+            <Text style={styles.skipText}>Skip for now</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // RENDER: Creating
   // ─────────────────────────────────────────────────────────────────────────
   if (subState === "creating") {
@@ -276,9 +317,6 @@ export default function CircleSetupScreen({ navigation }) {
       >
         <View style={styles.container}>
           <OnboardingProgress step={7} />
-          <TouchableOpacity onPress={() => setSubState("landing")} style={styles.back}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
           <Text style={styles.step}>Step 7 of 13</Text>
           <Text style={styles.title}>Create your{"\n"}Circle</Text>
           <Text style={styles.subtitle}>Give your circle a name and icon.</Text>
@@ -338,9 +376,6 @@ export default function CircleSetupScreen({ navigation }) {
     return (
       <View style={styles.container}>
         <OnboardingProgress step={7} />
-        <TouchableOpacity onPress={() => setSubState("creating")} style={styles.back}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
         <Text style={styles.step}>Step 7 of 13</Text>
         <Text style={styles.title}>Create your{"\n"}Circle</Text>
         <Text style={styles.subtitle}>Tap a circle to add members.</Text>
@@ -416,21 +451,21 @@ export default function CircleSetupScreen({ navigation }) {
   // ─────────────────────────────────────────────────────────────────────────
   if (subState === "contacts-perm") {
     return (
-      <View style={[styles.container, styles.centeredContent]}>
+      <View style={styles.container}>
         <OnboardingProgress step={7} />
+        <TouchableOpacity onPress={() => setSubState("created")} style={styles.back}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.step}>Step 7 of 13</Text>
+        <Text style={styles.title}>Find your{"\n"}people</Text>
+        <Text style={styles.subtitle}>
+          Give Notifeye access to your contacts to quickly add members to your{" "}
+          <Text style={{ color: Colors.brandBlue, fontWeight: "700" }}>{activeCircle?.name}</Text> circle.
+        </Text>
 
         <View style={styles.iconCircle}>
           <PeopleIcon size={44} color={Colors.brandBlue} />
         </View>
-
-        <TouchableOpacity onPress={() => setSubState("created")} style={[styles.back, { alignSelf: "flex-start" }]}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.permTitle}>Find your people</Text>
-        <Text style={styles.permBody}>
-          Notifeye needs access to your contacts to quickly add members to your{" "}
-          <Text style={{ color: Colors.brandBlue, fontWeight: "700" }}>{activeCircle?.name}</Text> circle.
-        </Text>
 
         <View style={styles.bottomArea}>
           <TouchableOpacity style={styles.primaryBtn} onPress={handleAllowContacts} activeOpacity={0.85}>
@@ -580,10 +615,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingTop: 72,
   },
-  centeredContent: {
-    alignItems: "center",
-  },
-
   back:     { marginBottom: 16 },
   backText: { color: Colors.textMuted, fontSize: 15 },
   step:     { color: Colors.textMuted, fontSize: 12, marginBottom: 8, letterSpacing: 1 },
@@ -748,31 +779,16 @@ const styles = StyleSheet.create({
 
   // ── Contacts permission ───────────────────────────────────────────────────
   iconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: Colors.bgSecondary,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 40,
-    marginBottom: 32,
+    alignSelf: "center",
+    marginTop: 32,
     borderWidth: 1.5,
     borderColor: Colors.brandBlue + "44",
-  },
-  permTitle: {
-    color: Colors.white,
-    fontSize: 22,
-    fontWeight: "800",
-    marginBottom: 14,
-    textAlign: "center",
-  },
-  permBody: {
-    color: Colors.textMuted,
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: "center",
-    paddingHorizontal: 8,
-    marginBottom: 40,
   },
 
   // ── Shared bottom area ────────────────────────────────────────────────────

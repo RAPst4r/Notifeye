@@ -89,6 +89,10 @@ export async function saveCameraMount(uid, position) {
   });
 }
 
+export async function saveCircles(uid, circles) {
+  await upsertUserProfile(uid, { circles });
+}
+
 export async function completeOnboarding(uid) {
   await upsertUserProfile(uid, {
     onboardingComplete: true,

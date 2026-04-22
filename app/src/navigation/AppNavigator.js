@@ -24,7 +24,6 @@ import TermsAcceptScreen       from "../screens/onboarding/TermsAcceptScreen";
 import WelcomeScreen           from "../screens/onboarding/WelcomeScreen";
 
 // Main app
-import DebugScreen  from "../screens/DebugScreen";
 import SplashScreen from "../screens/SplashScreen";
 import MainTabs     from "./MainTabs";
 
@@ -91,7 +90,6 @@ export default function AppNavigator() {
           <>
             <Stack.Screen name="Main"   component={MainTabs} />
             <Stack.Screen name="Splash" component={SplashScreen} />
-            <Stack.Screen name="Debug"  component={DebugScreen} />
           </>
         )}
       </Stack.Navigator>

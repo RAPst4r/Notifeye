@@ -1,6 +1,6 @@
 import "react-native-gesture-handler"; // must be first import
 import { useState } from "react";
-import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
+import { TouchableWithoutFeedback, Keyboard, View, TouchableOpacity, Text, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -32,31 +32,41 @@ const screenOptions = {
   animation: "slide_from_right",
 };
 
+function RootKeyboardDismiss({ children }) {
+  return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={{ flex: 1 }}>{children}</View>
+    </TouchableWithoutFeedback>
+  );
+}
+
 // ── DEV: walks all 13 onboarding steps in order ───────────────────────────────
 function OnboardingTestApp() {
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <NavigationContainer>
-          <Stack.Navigator screenOptions={screenOptions}>
-            <Stack.Screen name="NameEntry"         component={NameEntryScreen} />
-            <Stack.Screen name="AgeEntry"          component={AgeScreen} />
-            <Stack.Screen name="AuthEntry"         component={AuthMethodScreen} />
-            <Stack.Screen name="PhoneEntry"        component={PhoneEntryScreen} />
-            <Stack.Screen name="PhoneVerify"       component={PhoneVerifyScreen} />
-            <Stack.Screen name="PasswordCreate"    component={PasswordCreateScreen} />
-            <Stack.Screen name="CircleSetup"       component={CircleSetupScreen} />
-            <Stack.Screen name="EmergencyBuddy"    component={EmergencyBuddyScreen} />
-            <Stack.Screen name="Permissions"       component={PermissionsScreen} />
-            <Stack.Screen name="CameraCalibration" component={CameraCalibrationScreen} />
-            <Stack.Screen name="PlanSelect"        component={PlanSelectScreen} />
-            <Stack.Screen name="TermsAccept"       component={TermsAcceptScreen} />
-            <Stack.Screen name="Welcome"           component={WelcomeScreen} />
-            <Stack.Screen name="Main"              component={MainTabs} />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </AuthProvider>
-    </SafeAreaProvider>
+    <RootKeyboardDismiss>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <NavigationContainer>
+            <Stack.Navigator screenOptions={screenOptions}>
+              <Stack.Screen name="NameEntry"         component={NameEntryScreen} />
+              <Stack.Screen name="AgeEntry"          component={AgeScreen} />
+              <Stack.Screen name="AuthEntry"         component={AuthMethodScreen} />
+              <Stack.Screen name="PhoneEntry"        component={PhoneEntryScreen} />
+              <Stack.Screen name="PhoneVerify"       component={PhoneVerifyScreen} />
+              <Stack.Screen name="PasswordCreate"    component={PasswordCreateScreen} />
+              <Stack.Screen name="CircleSetup"       component={CircleSetupScreen} />
+              <Stack.Screen name="EmergencyBuddy"    component={EmergencyBuddyScreen} />
+              <Stack.Screen name="Permissions"       component={PermissionsScreen} />
+              <Stack.Screen name="CameraCalibration" component={CameraCalibrationScreen} />
+              <Stack.Screen name="PlanSelect"        component={PlanSelectScreen} />
+              <Stack.Screen name="TermsAccept"       component={TermsAcceptScreen} />
+              <Stack.Screen name="Welcome"           component={WelcomeScreen} />
+              <Stack.Screen name="Main"              component={MainTabs} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </RootKeyboardDismiss>
   );
 }
 
@@ -65,21 +75,23 @@ function ProductionApp() {
   const [showDebug, setShowDebug] = useState(false);
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <View style={styles.root}>
-          {showDebug ? <DebugScreen /> : <AppNavigator />}
+    <RootKeyboardDismiss>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <View style={styles.root}>
+            {showDebug ? <DebugScreen /> : <AppNavigator />}
 
-          <TouchableOpacity
-            style={styles.devButton}
-            onPress={() => setShowDebug(v => !v)}
-            hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-          >
-            <Text style={styles.devButtonText}>{showDebug ? 'UI' : 'DEV'}</Text>
-          </TouchableOpacity>
-        </View>
-      </AuthProvider>
-    </SafeAreaProvider>
+            <TouchableOpacity
+              style={styles.devButton}
+              onPress={() => setShowDebug(v => !v)}
+              hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+            >
+              <Text style={styles.devButtonText}>{showDebug ? 'UI' : 'DEV'}</Text>
+            </TouchableOpacity>
+          </View>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </RootKeyboardDismiss>
   );
 }
 
