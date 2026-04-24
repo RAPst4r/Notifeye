@@ -31,7 +31,7 @@ const STATE_SEVERITY = { alert: 0, payAttention: 1 };
 
 // ── Ring layout ────────────────────────────────────────────────────────────────
 
-const RING_R    = 74;
+const RING_R    = 150;
 const OX        = W / 2;
 const OY        = H * 0.525;
 const RING_TOP  = OY - RING_R;
@@ -63,7 +63,7 @@ canvas.style.height = H + 'px';
 ctx.scale(devicePixelRatio, devicePixelRatio);
 
 const SPACING  = 11;
-const RING_R   = 74;
+const RING_R   = 150;
 const DOT_BASE = 0.55;
 const DOT_MAX  = 2.6;
 const OX = W / 2;
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   // ── Badge ──────────────────────────────────────────────────────────────────
   badge: {
     position: 'absolute',
-    top: 60,
+    top: 72,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -507,20 +507,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   badgeDot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
   },
   badgeText: {
     color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
+    fontSize: 21,
     letterSpacing: 0.3,
   },
 
   // ── Timer ──────────────────────────────────────────────────────────────────
   timer: {
     position: 'absolute',
-    top: RING_TOP - 76,
+    top: 110,
     left: 0,
     right: 0,
     textAlign: 'center',
@@ -536,9 +536,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: RING_TOP,
     left: RING_LEFT,
-    width: 148,
-    height: 148,
-    borderRadius: 74,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
@@ -548,28 +548,28 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 74,
+    borderRadius: 150,
   },
   startText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '400',
+    fontSize: 38,
+    fontWeight: '300',
     letterSpacing: 0.5,
   },
   ringInner: {
     alignItems: 'center',
-    gap: 5,
+    gap: 8,
   },
   attentionLabel: {
     color: 'rgba(255,255,255,0.35)',
-    fontSize: 9,
+    fontSize: 13,
     fontWeight: '600',
-    letterSpacing: 1.5,
+    letterSpacing: 2,
   },
   attentionState: {
-    fontSize: 15,
-    fontWeight: '500',
-    letterSpacing: 0.3,
+    fontSize: 54,
+    fontWeight: '300',
+    letterSpacing: 1,
   },
 
   // ── Tagline ────────────────────────────────────────────────────────────────
@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
     right: 0,
     textAlign: 'center',
     color: 'rgba(255,255,255,0.13)',
-    fontSize: 14,
+    fontSize: 22,
     letterSpacing: 0.5,
   },
 
