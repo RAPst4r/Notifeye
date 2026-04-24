@@ -19,17 +19,15 @@ const { width: W, height: H } = Dimensions.get('window');
 
 const UI_COLORS = {
   alert:        '#5BAEE0',
-  caution:      '#E0AE3C',
   payAttention: '#DC4646',
 };
 
 const STATE_LABELS = {
   alert:        'Alert',
-  caution:      'Caution',
-  payAttention: 'Pay attention',
+  payAttention: 'DROWSY',
 };
 
-const STATE_SEVERITY = { alert: 0, caution: 1, payAttention: 2 };
+const STATE_SEVERITY = { alert: 0, payAttention: 1 };
 
 // ── Ring layout ────────────────────────────────────────────────────────────────
 
@@ -73,13 +71,11 @@ const OY = H * 0.525;
 
 const STATE_COLORS = {
   alert:        { r: 91,  g: 174, b: 224 },
-  caution:      { r: 224, g: 174, b: 60  },
   payAttention: { r: 220, g: 70,  b: 70  },
 };
 
 const PULSE_CONFIG = {
   alert:        { dur: 3800, interval: 3200 },
-  caution:      { dur: 2100, interval: 2100 },
   payAttention: { dur: 1300, interval: 1300 },
 };
 
@@ -196,8 +192,7 @@ requestAnimationFrame(drawFrame);
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function scoreToState(score) {
-  if (score < 0.35) return 'alert';
-  if (score < 0.55) return 'caution';
+  if (score < 0.55) return 'alert';
   return 'payAttention';
 }
 
@@ -209,9 +204,8 @@ function formatDuration(mins) {
 }
 
 function driveStatusMessage(state) {
-  if (state === 'payAttention') return 'High drowsiness detected. Please rest before driving again.';
-  if (state === 'caution')      return 'Some drowsiness was detected. Consider resting before your next trip.';
-  return 'You drove safely. Great job staying focused.';
+  if (state === 'payAttention') return 'Drowsiness detected. Consider resting before your next drive.';
+  return 'Safe drive. No drowsiness detected.';
 }
 
 // ── RippleCanvas — transparent WebView running the HTML5 canvas loop ────────────
@@ -273,8 +267,8 @@ export default function DrivingScreen() {
   const ringColorAnim = useRef(new Animated.Value(0)).current;
 
   const ringColor = ringColorAnim.interpolate({
-    inputRange:  [0, 1, 2],
-    outputRange: [UI_COLORS.alert, UI_COLORS.caution, UI_COLORS.payAttention],
+    inputRange:  [0, 1],
+    outputRange: [UI_COLORS.alert, UI_COLORS.payAttention],
   });
 
   function startDrive() {
@@ -327,7 +321,7 @@ export default function DrivingScreen() {
       STATE_SEVERITY[newState] > STATE_SEVERITY[prev] ? newState : prev,
     );
 
-    const targetVal = newState === 'alert' ? 0 : newState === 'caution' ? 1 : 2;
+    const targetVal = newState === 'alert' ? 0 : 1;
     Animated.timing(ringColorAnim, {
       toValue:         targetVal,
       duration:        500,
@@ -366,13 +360,15 @@ export default function DrivingScreen() {
       {/* Layer 2 — UI elements */}
       <View style={[StyleSheet.absoluteFill, { zIndex: 2 }]} pointerEvents="box-none">
 
-        {/* "Monitoring active" badge — always visible */}
+        {/* "Monitoring active" / "Drowsy detected" badge — always visible */}
         <View style={styles.badge} pointerEvents="none">
           <View style={[
             styles.badgeDot,
             { backgroundColor: isDriving ? UI_COLORS[attentionState] : 'rgba(255,255,255,0.25)' },
           ]} />
-          <Text style={styles.badgeText}>Monitoring active</Text>
+          <Text style={styles.badgeText}>
+            {isDriving && attentionState === 'payAttention' ? 'Drowsy detected' : 'Monitoring active'}
+          </Text>
         </View>
 
         {/* Drive timer — driving only */}
@@ -385,7 +381,14 @@ export default function DrivingScreen() {
         {/* Center ring */}
         <Animated.View style={[
           styles.ring,
-          { borderColor: isDriving ? ringColor : 'rgba(255,255,255,0.3)' },
+          {
+            borderColor: !isDriving
+              ? 'rgba(255,255,255,0.3)'
+              : ringColorAnim.interpolate({
+                  inputRange:  [0, 1],
+                  outputRange: ['rgba(91,174,224,0.45)', 'rgba(220,70,70,0.52)'],
+                }),
+          },
         ]}>
           {!isDriving ? (
             <TouchableOpacity onPress={startDrive} style={styles.ringTap}>
