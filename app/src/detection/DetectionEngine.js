@@ -10,10 +10,9 @@
 //   playsInSilentModeIOS: true bypasses the iOS mute switch.
 //
 // ALERT STATE MACHINE:
-//   DROWSY (>= 0.55) → beep loops
-//   MILD   (0.30–0.55) → beep stops, recovery timer does NOT start
-//   ALERT  (< 0.30)  → beep stops, 12s recovery timer starts
-//   After 12s in ALERT zone → driver considered recovered, next trigger allowed
+//   score >= 0.55 → beep starts (if not already beeping)
+//   score <  0.55 → beep stops
+//   No cooldown, no gap — re-triggers immediately on next crossing
 
 import { useRef, useCallback, useEffect } from "react";
 import { StyleSheet } from "react-native";
@@ -40,10 +39,7 @@ import {
   ALERT_THRESHOLD,
 } from "../../../model/scorer";
 
-const ALERT_LEVEL       = 0.30;   // below this = truly alert, recovery timer starts
-const RECOVERY_MS       = 12_000; // must stay in ALERT zone for 12s before re-alerting
-const MEDIA_RESUME_MS   = 1_000;  // buffer after beep stops before other media resumes
-const MIN_RETRIGGER_MS  = 3_000;  // minimum gap between beep end and next beep start
+const MEDIA_RESUME_MS = 1_000; // buffer after beep stops before other media resumes
 
 export default function DetectionEngine({ onSignals, onAlert, onStatus, style }) {
   const webViewRef   = useRef(null);
@@ -53,10 +49,8 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
   const yawnRef      = useRef(new YawnTracker());
 
   // Alert state
-  const isAlertingRef      = useRef(false); // true while beep is looping
-  const inCooldownRef      = useRef(false); // true during 12s recovery window
-  const cooldownStartRef   = useRef(0);     // timestamp when cooldown began
-  const lastBeepEndRef     = useRef(0);     // timestamp when last beep stopped (for re-trigger gap)
+  const isAlertingRef    = useRef(false); // true while beep is looping
+  const resumeTimeoutRef = useRef(null);  // pending player.pause() after beep stops
 
   // Audio — useAudioPlayer creates and manages the player lifecycle automatically
   const player         = useAudioPlayer(require("../../assets/beep.wav"));
@@ -87,7 +81,14 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     if (isAlertingRef.current) return;
     isAlertingRef.current = true;
 
-    // Boost volume to max (Tile-style) — no-op in Expo Go, works in dev build
+    // Cancel any pending player.pause() from a previous _stopBeep so a rapid
+    // MILD→DROWSY crossing doesn't kill the freshly restarted beep.
+    clearTimeout(resumeTimeoutRef.current);
+
+    // Restore player volume in case _stopBeep muted it before we cancelled.
+    try { player.volume = 1.0; } catch {}
+
+    // Boost system volume to max (Tile-style) — no-op in Expo Go, works in dev build
     if (_getVolume && _setVolume) {
       try {
         const result = await _getVolume();
@@ -106,8 +107,8 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     isAlertingRef.current = false;
 
     // Mute immediately so user hears silence, but keep audio session active
-    // for MEDIA_RESUME_MS — this gives other media a clean 1s buffer before
-    // iOS releases the session and allows them to resume.
+    // for MEDIA_RESUME_MS — gives other media a clean buffer before iOS
+    // releases the session. The timeout is stored so _startBeep can cancel it.
     try { player.volume = 0; } catch {}
 
     // Restore system volume right away (no need to wait)
@@ -120,9 +121,8 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
       savedVolumeRef.current = null;
     }
 
-    setTimeout(() => {
+    resumeTimeoutRef.current = setTimeout(() => {
       try { player.pause(); player.volume = 1.0; } catch {}
-      lastBeepEndRef.current = Date.now();
     }, MEDIA_RESUME_MS);
   }
 
@@ -168,43 +168,12 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     });
 
     // ── Alert state machine ─────────────────────────────────────────────────
-    //
-    // DROWSY (>= 0.55): beep starts unless in 12s cooldown window
-    // MILD   (0.30–0.55): beep stops — cooldown does NOT start — re-alert
-    //                     fires immediately if score goes back to drowsy
-    // ALERT  (< 0.30): beep stops — 12s cooldown starts here only
-    //                  after 12s: cooldown clears, next drowsy re-alerts
-
     if (composite >= ALERT_THRESHOLD) {
-      // Tick cooldown — if it's done, clear it
-      if (inCooldownRef.current && now - cooldownStartRef.current >= RECOVERY_MS) {
-        inCooldownRef.current    = false;
-        cooldownStartRef.current = 0;
-      }
-
-      const gapOk = now - lastBeepEndRef.current >= MIN_RETRIGGER_MS;
-      if (!isAlertingRef.current && !inCooldownRef.current && gapOk) {
+      if (!isAlertingRef.current) {
         _startBeep();
         onAlert?.(now, composite);
       }
-
-    } else if (composite < ALERT_LEVEL) {
-      // TRULY ALERT — stop beep and start cooldown if coming off an alert
-      if (isAlertingRef.current) {
-        _stopBeep();
-        inCooldownRef.current    = true;
-        cooldownStartRef.current = now;
-      } else if (inCooldownRef.current) {
-        // Already in cooldown — check if it's expired
-        if (now - cooldownStartRef.current >= RECOVERY_MS) {
-          inCooldownRef.current    = false;
-          cooldownStartRef.current = 0;
-        }
-      }
-
     } else {
-      // MILD (0.30–0.55) — stop beep only, no cooldown
-      // Going mild → drowsy re-alerts immediately
       if (isAlertingRef.current) _stopBeep();
     }
 
