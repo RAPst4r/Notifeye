@@ -110,9 +110,13 @@ const CALIBRATION_HTML = `<!DOCTYPE html>
     let rippleOX       = 0;
     let rippleOY       = 0;
 
+    // object-fit: cover coordinate mapping — computed once after video metadata loads
+    let drawW    = W;
+    let drawH    = H;
+    let drawOffX = 0;
+    let drawOffY = 0;
+
     // ── Drawing ───────────────────────────────────────────────────────────────
-    // CHANGE 2: landmark x is flipped (1 - lm.x) to match the CSS-mirrored video.
-    // CHANGE 3: dots are larger (2.2px) and base alpha is higher for visibility.
     function drawFrame(lm, scanY, pct, now) {
       ctx.clearRect(0, 0, W, H);
 
@@ -124,20 +128,20 @@ const CALIBRATION_HTML = `<!DOCTYPE html>
         ctx.fillRect(0, 0, W, H);
       }
 
-      // 2. Face mesh dots
+      // 2. Face mesh dots — mirrored x to match scaleX(-1) video, then shifted by
+      //    the object-fit:cover crop offset so dots align with the displayed face.
       const meshAlpha = rippling
-        ? (1 - tRipple) * 0.85
-        : 0.18 + pct * 0.52;
+        ? (1 - tRipple) * 0.9
+        : 0.45 + pct * 0.50;
 
       for (let i = 0; i < lm.length; i++) {
-        // Mirror x to match scaleX(-1) on the video element
-        const x  = (1 - lm[i].x) * W;
-        const y  = lm[i].y * H;
+        const x  = (1 - lm[i].x) * drawW - drawOffX;
+        const y  = lm[i].y * drawH - drawOffY;
         const dy = Math.abs(y - scanY);
-        const boost = (!rippling && dy < 20) ? (1 - dy / 20) * 0.7 : 0;
+        const boost = (!rippling && dy < 20) ? (1 - dy / 20) * 0.8 : 0;
         const alpha = Math.min(1, Math.max(0, meshAlpha + boost));
         ctx.beginPath();
-        ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+        ctx.arc(x, y, 2.0, 0, Math.PI * 2);
         ctx.fillStyle = "rgba(91,174,224," + alpha + ")";
         ctx.fill();
       }
@@ -230,11 +234,10 @@ const CALIBRATION_HTML = `<!DOCTYPE html>
               yaw:   avg(readings.map(r => r.yaw)),
               roll:  avg(readings.map(r => r.roll)),
             };
-            // Mirror ripple origin x to match video
             rippling    = true;
             rippleStart = wallNow;
-            rippleOX    = (1 - lm[4].x) * W;
-            rippleOY    = lm[4].y * H;
+            rippleOX    = (1 - lm[4].x) * drawW - drawOffX;
+            rippleOY    = lm[4].y * drawH - drawOffY;
             post({ type: "DONE", baseline });
           }
         } else if (doneFired) {
@@ -290,6 +293,28 @@ const CALIBRATION_HTML = `<!DOCTYPE html>
         await new Promise(r => { video.onloadedmetadata = r; });
         await video.play();
 
+        // Compute the object-fit: cover transform from the actual camera dimensions.
+        // MediaPipe landmarks are normalized to the raw camera frame, but the video
+        // element crops and scales that frame to fill the container. Without this
+        // correction, the face mesh is compressed relative to what's displayed.
+        const vidW = video.videoWidth  || 640;
+        const vidH = video.videoHeight || 480;
+        if ((vidW / vidH) > (W / H)) {
+          // Source is wider — scale to fill height, crop left and right
+          const scale = H / vidH;
+          drawW    = vidW * scale;
+          drawH    = H;
+          drawOffX = (drawW - W) / 2;
+          drawOffY = 0;
+        } else {
+          // Source is taller — scale to fill width, crop top and bottom
+          const scale = W / vidW;
+          drawW    = W;
+          drawH    = vidH * scale;
+          drawOffX = 0;
+          drawOffY = (drawH - H) / 2;
+        }
+
         running = true;
         requestAnimationFrame(processFrame);
       } catch (err) {
@@ -308,23 +333,23 @@ export default function HeadCalibrationScreen({ navigation, route }) {
 
   const isRecalibrate = route?.params?.mode === "recalibrate";
 
-  const webViewRef  = useRef(null);
+  const webViewRef = useRef(null);
 
   // CHANGE 1: "instructions" is now the initial phase.
-  const [phase,      setPhase]      = useState("instructions");
-  const [faceLost,   setFaceLost]   = useState(false);
-  const [baseline,   setBaseline]   = useState(null);
-  const [saving,     setSaving]     = useState(false);
+  const [phase, setPhase] = useState("instructions");
+  const [faceLost, setFaceLost] = useState(false);
+  const [baseline, setBaseline] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [webViewKey, setWebViewKey] = useState(0);
 
   // CHANGE 1: 5-second fill bar for the instructions continue button.
   const barAnim = useRef(new Animated.Value(0)).current;
-  const [ready,  setReady] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     Animated.timing(barAnim, {
-      toValue:         1,
-      duration:        5000,
+      toValue: 1,
+      duration: 15000,
       useNativeDriver: false, // animating width — cannot use native driver
     }).start(({ finished }) => {
       if (finished) setReady(true);
@@ -336,9 +361,9 @@ export default function HeadCalibrationScreen({ navigation, route }) {
     let msg;
     try { msg = JSON.parse(event.nativeEvent.data); } catch { return; }
 
-    if (msg.type === "FACE_LOST")  { setFaceLost(true);  return; }
+    if (msg.type === "FACE_LOST") { setFaceLost(true); return; }
     if (msg.type === "FACE_FOUND") { setFaceLost(false); return; }
-    if (msg.type === "PROGRESS")   { return; }
+    if (msg.type === "PROGRESS") { return; }
     if (msg.type === "ERROR") {
       Alert.alert("Camera error", msg.message || "Could not start camera.");
       return;
@@ -386,11 +411,11 @@ export default function HeadCalibrationScreen({ navigation, route }) {
   // ── Phase 0 — Instructions ───────────────────────────────────────────────────
   if (phase === "instructions") {
     const barWidth = barAnim.interpolate({
-      inputRange:  [0, 1],
+      inputRange: [0, 1],
       outputRange: ["0%", "100%"],
     });
     const barColor = barAnim.interpolate({
-      inputRange:  [0, 1],
+      inputRange: [0, 1],
       outputRange: ["#2a3a4a", Colors.brandBlue],
     });
 
@@ -403,26 +428,27 @@ export default function HeadCalibrationScreen({ navigation, route }) {
 
         <View style={[styles.instrContent, { paddingBottom: insets.bottom + 16 }]}>
           <View style={styles.instrBody}>
-            <Text style={styles.instrHeading}>Position your phone</Text>
+            <Text style={styles.instrHeading}>Camera Calibration</Text>
+            <Text style={styles.instrSubheading}>Let's learn your setup 👋</Text>
             <Text style={styles.instrText}>
-              Before we start, get yourself set up the way you would for a real drive.
+              Every phone mount is a little different, dash, windshield, vent, tilted left, tilted right. Notifeye needs to know where yours is so it can tell the difference between you looking at the road and you dozing off.
             </Text>
             <View style={styles.instrStepList}>
               <Text style={styles.instrStep}>
-                {"1.  "}Sit in your car in your normal driving position.
+                {"1.  "}Hop in your car and sit how you normally would.
               </Text>
               <Text style={styles.instrStep}>
-                {"2.  "}Mount your phone exactly where it will live during drives — dash, windshield, vent, wherever you'll use it.
+                {"2.  "}Mount your phone exactly where it lives during drives.
               </Text>
               <Text style={styles.instrStep}>
-                {"3.  "}Look straight ahead naturally, the way you would watch the road.
+                {"3.  "}Look straight ahead like you're watching the road.
               </Text>
               <Text style={styles.instrStep}>
-                {"4.  "}Keep your head still. Tap Continue when you're ready and the camera will do the rest.
+                {"4.  "}Tap Continue and hold still for 3 seconds, we'll handle the rest.
               </Text>
             </View>
             <Text style={styles.instrNote}>
-              This takes about 3 seconds and only needs to be done once per mount position.
+              Only takes 3 seconds. Only needs to be done once per mount position.
             </Text>
           </View>
 
@@ -582,8 +608,14 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 28,
     fontWeight: "800",
-    marginBottom: 18,
+    marginBottom: 8,
     lineHeight: 34,
+  },
+  instrSubheading: {
+    color: Colors.brandBlue,
+    fontSize: 17,
+    fontWeight: "600",
+    marginBottom: 20,
   },
   instrText: {
     color: Colors.textMuted,
@@ -593,10 +625,11 @@ const styles = StyleSheet.create({
   },
   instrStepList: { marginBottom: 28 },
   instrStep: {
-    color: Colors.white,
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 14,
+    color: Colors.brandBlue,
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 16,
+    fontWeight: "500",
   },
   instrNote: {
     color: Colors.textMuted,
@@ -713,7 +746,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 24,
   },
-  checkmark:      { color: Colors.brandBlue, fontSize: 36, fontWeight: "700" },
+  checkmark: { color: Colors.brandBlue, fontSize: 36, fontWeight: "700" },
   confirmedTitle: {
     color: Colors.white,
     fontSize: 26,
@@ -738,9 +771,9 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     alignItems: "center",
   },
-  valueItem:   { flex: 1, alignItems: "center" },
-  valueNum:    { color: Colors.brandBlue, fontSize: 20, fontWeight: "700", marginBottom: 4 },
-  valueLabel:  { color: Colors.textMuted, fontSize: 11, letterSpacing: 0.5 },
+  valueItem: { flex: 1, alignItems: "center" },
+  valueNum: { color: Colors.brandBlue, fontSize: 20, fontWeight: "700", marginBottom: 4 },
+  valueLabel: { color: Colors.textMuted, fontSize: 11, letterSpacing: 0.5 },
   valueDivider: { width: 1, height: 36, backgroundColor: "#1a2a3a" },
 
   continueBtn: {

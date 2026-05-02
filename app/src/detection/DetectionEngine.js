@@ -41,7 +41,7 @@ import {
 
 const MEDIA_RESUME_MS = 1_000; // buffer after beep stops before other media resumes
 
-export default function DetectionEngine({ onSignals, onAlert, onStatus, baseline, style }) {
+export default function DetectionEngine({ onSignals, onAlert, onStatus, baseline, active = true, style }) {
   const webViewRef   = useRef(null);
   const perclosRef   = useRef(new PerclosTracker());
   const sustainedRef = useRef(new SustainedClosureDetector());
@@ -51,6 +51,11 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, baseline
   // Alert state
   const isAlertingRef    = useRef(false); // true while beep is looping
   const resumeTimeoutRef = useRef(null);  // pending player.pause() after beep stops
+
+  // Keep a ref in sync with the active prop so the message handler (memoized)
+  // always reads the latest value without needing to be re-created.
+  const activeRef = useRef(active);
+  activeRef.current = active;
 
   // Audio — useAudioPlayer creates and manages the player lifecycle automatically
   const player         = useAudioPlayer(require("../../assets/beep.wav"));
@@ -75,6 +80,11 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, baseline
       try { player.remove(); } catch {}
     };
   }, []);
+
+  // Stop beeping immediately when the caller deactivates detection (drive ended).
+  useEffect(() => {
+    if (!active && isAlertingRef.current) _stopBeep();
+  }, [active]);
 
   // ── Beep control ────────────────────────────────────────────────────────────
   async function _startBeep() {
@@ -137,7 +147,12 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, baseline
     if (msg.type !== "FRAME")  return;
 
     const { faceDetected, ear, headPose, mar, timestamp } = msg;
-    if (!faceDetected) { onSignals?.({ faceDetected: false }); return; }
+    if (!faceDetected) {
+      // Face lost — no more threshold checks will fire, so stop the beep now.
+      if (isAlertingRef.current) _stopBeep();
+      onSignals?.({ faceDetected: false });
+      return;
+    }
 
     const now = timestamp ?? Date.now();
 
@@ -168,7 +183,7 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, baseline
     });
 
     // ── Alert state machine ─────────────────────────────────────────────────
-    if (composite >= ALERT_THRESHOLD) {
+    if (activeRef.current && composite >= ALERT_THRESHOLD) {
       if (!isAlertingRef.current) {
         _startBeep();
         onAlert?.(now, composite);

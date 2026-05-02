@@ -397,6 +397,7 @@ export default function DrivingScreen() {
           onSignals={handleSignals}
           onAlert={handleAlert}
           baseline={headPoseBaseline}
+          active={isDriving}
           style={styles.engineWebView}
         />
       </View>
