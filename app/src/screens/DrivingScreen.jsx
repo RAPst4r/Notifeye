@@ -273,6 +273,8 @@ export default function DrivingScreen() {
   const adjustedRingTop = insets.top + (H - insets.top - TAB_BAR_HEIGHT - insets.bottom) / 2 - RING_R + 5;
 
   // ── Dashboard data ───────────────────────────────────────────────────────────
+  const headPoseBaseline = profile?.headPoseBaseline ?? null;
+
   const firstName = profile?.name ?? 'there';
   const streak = profile?.streak ?? 0;
   const safeMiles = profile?.safeMiles ?? 0;
@@ -394,6 +396,7 @@ export default function DrivingScreen() {
         <DetectionEngine
           onSignals={handleSignals}
           onAlert={handleAlert}
+          baseline={headPoseBaseline}
           style={styles.engineWebView}
         />
       </View>
@@ -437,14 +440,23 @@ export default function DrivingScreen() {
               </Text>
             </View>
 
-            {/* Start Drive button */}
-            <TouchableOpacity style={styles.dashStartBtn} onPress={startDrive} activeOpacity={0.85}>
-              <Text style={styles.dashStartIcon}>◉</Text>
-              <View>
-                <Text style={styles.dashStartLabel}>Start Drive</Text>
-                <Text style={styles.dashStartSub}>Camera starts automatically</Text>
+            {/* Start Drive button — blocked if user hasn't calibrated */}
+            {headPoseBaseline ? (
+              <TouchableOpacity style={styles.dashStartBtn} onPress={startDrive} activeOpacity={0.85}>
+                <Text style={styles.dashStartIcon}>◉</Text>
+                <View>
+                  <Text style={styles.dashStartLabel}>Start Drive</Text>
+                  <Text style={styles.dashStartSub}>Camera starts automatically</Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.dashCalibrationWarning}>
+                <Text style={styles.dashCalibrationTitle}>Head position not calibrated</Text>
+                <Text style={styles.dashCalibrationSub}>
+                  Go to Profile → Recalibrate to set up your personal baseline before driving.
+                </Text>
               </View>
-            </TouchableOpacity>
+            )}
 
             {/* Your Circle */}
             <Text style={styles.dashSectionTitle}>Your Circle</Text>
@@ -660,6 +672,17 @@ const styles = StyleSheet.create({
   dashStartIcon: { color: '#fff', fontSize: 26 },
   dashStartLabel: { color: '#fff', fontSize: 18, fontWeight: '800' },
   dashStartSub: { color: 'rgba(255,255,255,0.65)', fontSize: 12, marginTop: 2 },
+
+  dashCalibrationWarning: {
+    backgroundColor: Colors.bgSecondary,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 36,
+    borderWidth: 1.5,
+    borderColor: Colors.alert + '55',
+  },
+  dashCalibrationTitle: { color: Colors.alert, fontSize: 15, fontWeight: '700', marginBottom: 6 },
+  dashCalibrationSub:   { color: Colors.textMuted, fontSize: 13, lineHeight: 19 },
 
   dashSectionTitle: {
     color: Colors.white,

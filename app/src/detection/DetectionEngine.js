@@ -41,7 +41,7 @@ import {
 
 const MEDIA_RESUME_MS = 1_000; // buffer after beep stops before other media resumes
 
-export default function DetectionEngine({ onSignals, onAlert, onStatus, style }) {
+export default function DetectionEngine({ onSignals, onAlert, onStatus, baseline, style }) {
   const webViewRef   = useRef(null);
   const perclosRef   = useRef(new PerclosTracker());
   const sustainedRef = useRef(new SustainedClosureDetector());
@@ -155,7 +155,7 @@ export default function DetectionEngine({ onSignals, onAlert, onStatus, style })
     const rapidBlinkScore  = blinkRef.current.getRapidBlinkScore();
     const yawnScore        = yawnRef.current.getYawnScore();
     const yawnCount        = yawnRef.current.yawnCount;
-    const headPoseScore    = getHeadPoseScore(headPose);
+    const headPoseScore    = getHeadPoseScore(headPose, baseline);
 
     const composite = computeDrowsinessScore({
       sustainedClosure, perclos, headPoseScore,

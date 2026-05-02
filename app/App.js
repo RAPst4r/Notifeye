@@ -19,6 +19,7 @@ import PermissionsScreen from "./src/screens/onboarding/PermissionsScreen";
 import CameraCalibrationScreen from "./src/screens/onboarding/CameraCalibrationScreen";
 import PlanSelectScreen from "./src/screens/onboarding/PlanSelectScreen";
 import TermsAcceptScreen from "./src/screens/onboarding/TermsAcceptScreen";
+import HeadCalibrationScreen from "./src/screens/onboarding/HeadCalibrationScreen";
 import WelcomeScreen from "./src/screens/onboarding/WelcomeScreen";
 import MainTabs from "./src/navigation/MainTabs";
 
@@ -59,8 +60,9 @@ function OnboardingTestApp() {
               <Stack.Screen name="Permissions" component={PermissionsScreen} />
               <Stack.Screen name="CameraCalibration" component={CameraCalibrationScreen} />
               <Stack.Screen name="PlanSelect" component={PlanSelectScreen} />
-              <Stack.Screen name="TermsAccept" component={TermsAcceptScreen} />
-              <Stack.Screen name="Welcome" component={WelcomeScreen} />
+              <Stack.Screen name="TermsAccept"     component={TermsAcceptScreen} />
+              <Stack.Screen name="HeadCalibration" component={HeadCalibrationScreen} />
+              <Stack.Screen name="Welcome"          component={WelcomeScreen} />
               <Stack.Screen name="Main" component={MainTabs} />
             </Stack.Navigator>
           </NavigationContainer>

@@ -93,11 +93,21 @@ export async function saveCircles(uid, circles) {
   await upsertUserProfile(uid, { circles });
 }
 
+export async function saveTermsAccepted(uid) {
+  await upsertUserProfile(uid, {
+    termsAcceptedAt: serverTimestamp(),
+    onboardingStep:  13,
+  });
+}
+
+export async function saveHeadPoseBaseline(uid, baseline) {
+  await upsertUserProfile(uid, { headPoseBaseline: baseline });
+}
+
 export async function completeOnboarding(uid) {
   await upsertUserProfile(uid, {
     onboardingComplete: true,
-    onboardingStep:     13,
-    termsAcceptedAt:    serverTimestamp(),
+    onboardingStep:     14,
   });
 }
 

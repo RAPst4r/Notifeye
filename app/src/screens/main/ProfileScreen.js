@@ -7,11 +7,12 @@ import { logOut } from "../../firebase/authService";
 const SETTINGS_ROWS = [
   { label: "Notifications" },
   { label: "Sensitivity" },
+  { label: "Recalibrate", action: "recalibrate" },
   { label: "Privacy" },
   { label: "Help" },
 ];
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const { profile, user } = useAuth();
 
   const name    = [profile?.name, profile?.lastName].filter(Boolean).join(" ") || "—";
@@ -48,6 +49,11 @@ export default function ProfileScreen() {
               key={row.label}
               style={[styles.row, i === SETTINGS_ROWS.length - 1 && styles.rowLast]}
               activeOpacity={0.7}
+              onPress={() => {
+                if (row.action === "recalibrate") {
+                  navigation.getParent?.()?.navigate("RecalibrateModal", { mode: "recalibrate" });
+                }
+              }}
             >
               <Text style={styles.rowLabel}>{row.label}</Text>
               <Text style={styles.rowChevron}>›</Text>

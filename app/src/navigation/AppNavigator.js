@@ -21,6 +21,7 @@ import CircleSetupScreen       from "../screens/onboarding/CircleSetupScreen";
 import EmergencyBuddyScreen    from "../screens/onboarding/EmergencyBuddyScreen";
 import PlanSelectScreen        from "../screens/onboarding/PlanSelectScreen";
 import TermsAcceptScreen       from "../screens/onboarding/TermsAcceptScreen";
+import HeadCalibrationScreen   from "../screens/onboarding/HeadCalibrationScreen";
 import WelcomeScreen           from "../screens/onboarding/WelcomeScreen";
 
 // Main app
@@ -44,7 +45,8 @@ const RESUME_SCREEN = {
   10: "PlanSelect",
   11: "PlanSelect",
   12: "TermsAccept",
-  13: "Welcome",
+  13: "HeadCalibration",
+  14: "Welcome",
 };
 
 export default function AppNavigator() {
@@ -88,8 +90,13 @@ export default function AppNavigator() {
         ) : (
           // ── Main app stack ────────────────────────────────────────────────────
           <>
-            <Stack.Screen name="Main"   component={MainTabs} />
-            <Stack.Screen name="Splash" component={SplashScreen} />
+            <Stack.Screen name="Main"             component={MainTabs} />
+            <Stack.Screen name="Splash"           component={SplashScreen} />
+            <Stack.Screen
+              name="RecalibrateModal"
+              component={HeadCalibrationScreen}
+              options={{ presentation: "modal", animation: "slide_from_bottom" }}
+            />
           </>
         )}
       </Stack.Navigator>
@@ -105,6 +112,7 @@ function OnboardingStack({ initialScreen }) {
       <Stack.Screen name="Permissions" component={PermissionsScreen} />
       <Stack.Screen name="PlanSelect"  component={PlanSelectScreen} />
       <Stack.Screen name="TermsAccept"       component={TermsAcceptScreen} />
+      <Stack.Screen name="HeadCalibration"   component={HeadCalibrationScreen} />
       <Stack.Screen name="Welcome"           component={WelcomeScreen} />
       <Stack.Screen name="PhoneEntry"        component={PhoneEntryScreen} />
       <Stack.Screen name="PhoneVerify"       component={PhoneVerifyScreen} />

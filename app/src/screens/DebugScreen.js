@@ -15,6 +15,7 @@ import { StatusBar } from "expo-status-bar";
 import DetectionEngine from "../detection/DetectionEngine";
 import { ALERT_THRESHOLD } from "../../../model/scorer";
 import { logOut } from "../firebase/authService";
+import { useAuth } from "../context/AuthContext";
 
 const MAX_ALERT_LOG = 10;
 
@@ -94,6 +95,7 @@ function ContribBar({ label, value, max = 0.45 }) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 
 export default function DebugScreen({ navigation }) {
+  const { profile }             = useAuth();
   const [signals, setSignals]   = useState(null);
   const [alertLog, setAlertLog] = useState([]);
   const [status, setStatus]     = useState("Initializing...");
@@ -117,6 +119,7 @@ export default function DebugScreen({ navigation }) {
           onSignals={handleSignals}
           onAlert={handleAlert}
           onStatus={setStatus}
+          baseline={profile?.headPoseBaseline ?? null}
         />
         {/* Status overlay */}
         <View style={styles.statusBadge} pointerEvents="none">
