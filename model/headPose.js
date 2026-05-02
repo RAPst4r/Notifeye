@@ -27,7 +27,8 @@ export function extractHeadPose(transformationMatrix) {
   const m = transformationMatrix.data;
   const pitch = Math.asin(-m[6]) * (180 / Math.PI);
   const yaw   = Math.atan2(m[2], m[10]) * (180 / Math.PI);
-  return { pitch, yaw };
+  const roll  = Math.atan2(m[1], m[5]) * (180 / Math.PI);
+  return { pitch, yaw, roll };
 }
 
 /**
@@ -36,14 +37,13 @@ export function extractHeadPose(transformationMatrix) {
  * Droop:      pitch falls below MOUNT_PITCH_BASELINE (head tilting forward = drowsy).
  * Distract:   |yaw| deviates significantly from MOUNT_YAW_BASELINE in either direction.
  */
-export function getHeadPoseScore({ pitch, yaw }) {
-  // DROOP: positive pitchDev = head is dropping below natural position
-  const pitchDev   = MOUNT_PITCH_BASELINE - pitch;
+export function getHeadPoseScore({ pitch, yaw }, baseline) {
+  if (!baseline) return 0;
+
+  const pitchDev   = baseline.pitch - pitch;
   const droopScore = Math.max(0, Math.min(1, (pitchDev - DROOP_DEAD_ZONE) / DROOP_FULL_RANGE));
 
-  // DISTRACTION: deviation from natural road-looking yaw in either direction
-  // catches both "staring at phone" (yaw→0) and "looking too far away" (yaw→40+)
-  const yawDev        = Math.abs(Math.abs(yaw) - MOUNT_YAW_BASELINE);
+  const yawDev        = Math.abs(yaw - baseline.yaw);
   const distractScore = Math.max(0, Math.min(1, (yawDev - DISTRACT_DEAD_ZONE) / DISTRACT_FULL_RANGE));
 
   return Math.max(droopScore, distractScore);

@@ -81,7 +81,8 @@ export const DETECTION_HTML = `<!DOCTYPE html>
       const m = matrix.data;
       const pitch = Math.asin(-m[6]) * (180 / Math.PI);
       const yaw   = Math.atan2(m[2], m[10]) * (180 / Math.PI);
-      return { pitch, yaw };
+      const roll  = Math.atan2(m[1], m[5]) * (180 / Math.PI);
+      return { pitch, yaw, roll };
     }
 
     // ── Alert state (audio handled by RN side via expo-av) ───────────────────

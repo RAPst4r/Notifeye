@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { completeOnboarding } from "../../firebase/firestoreService";
+import { saveTermsAccepted } from "../../firebase/firestoreService";
 import { useAuth } from "../../context/AuthContext";
 import OnboardingProgress from "../../components/OnboardingProgress";
 import { Colors } from "../../theme/colors";
@@ -23,8 +23,8 @@ export default function TermsAcceptScreen({ navigation }) {
     if (!accepted) return;
     setSaving(true);
     try {
-      await completeOnboarding(user.uid);
-      navigation.navigate("Welcome");
+      await saveTermsAccepted(user.uid);
+      navigation.navigate("HeadCalibration");
     } catch {
       Alert.alert("Error", "Could not save. Please try again.");
     } finally {
