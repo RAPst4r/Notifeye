@@ -3,23 +3,14 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Text, View } from "react-native";
 import { Colors } from "../theme/colors";
 
-import HomeScreen    from "../screens/main/HomeScreen";
-import DriveScreen   from "../screens/main/DriveScreen";
-import HistoryScreen from "../screens/main/HistoryScreen";
 import CircleScreen  from "../screens/main/CircleScreen";
+import DriveScreen   from "../screens/DrivingScreen";
 import ProfileScreen from "../screens/main/ProfileScreen";
 
 const Tab = createBottomTabNavigator();
 
-// Simple text icons — swap for vector icons later
 function TabIcon({ label, focused }) {
-  const icons = {
-    Home:    "⌂",
-    Drive:   "◉",
-    History: "☰",
-    Circle:  "◎",
-    Profile: "○",
-  };
+  const icons = { Circle: "◎", Drive: "◉", Profile: "○" };
   return (
     <View style={{ alignItems: "center", justifyContent: "center" }}>
       <Text style={{ fontSize: 20, color: focused ? Colors.brandBlue : Colors.textMuted }}>
@@ -32,6 +23,7 @@ function TabIcon({ label, focused }) {
 export default function MainTabs() {
   return (
     <Tab.Navigator
+      initialRouteName="Drive"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarIcon: ({ focused }) => <TabIcon label={route.name} focused={focused} />,
@@ -45,20 +37,18 @@ export default function MainTabs() {
           </Text>
         ),
         tabBarStyle: {
-          backgroundColor: Colors.bgSecondary,
+          backgroundColor: Colors.bgPrimary,
           borderTopColor: "#0a1520",
           borderTopWidth: 1,
           height: 72,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: Colors.brandBlue,
+        tabBarActiveTintColor:   Colors.brandBlue,
         tabBarInactiveTintColor: Colors.textMuted,
       })}
     >
-      <Tab.Screen name="Home"    component={HomeScreen} />
-      <Tab.Screen name="Drive"   component={DriveScreen} />
-      <Tab.Screen name="History" component={HistoryScreen} />
       <Tab.Screen name="Circle"  component={CircleScreen} />
+      <Tab.Screen name="Drive"   component={DriveScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
