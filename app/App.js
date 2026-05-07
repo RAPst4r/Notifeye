@@ -1,4 +1,5 @@
 import "react-native-gesture-handler"; // must be first import
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useState } from "react";
 import { TouchableWithoutFeedback, Keyboard, View, TouchableOpacity, Text, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -77,23 +78,25 @@ function ProductionApp() {
   const [showDebug, setShowDebug] = useState(false);
 
   return (
-    <RootKeyboardDismiss>
-      <SafeAreaProvider>
-        <AuthProvider>
-          <View style={styles.root}>
-            {showDebug ? <DebugScreen /> : <AppNavigator />}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <RootKeyboardDismiss>
+        <SafeAreaProvider>
+          <AuthProvider>
+            <View style={styles.root}>
+              {showDebug ? <DebugScreen /> : <AppNavigator />}
 
-            <TouchableOpacity
-              style={styles.devButton}
-              onPress={() => setShowDebug(v => !v)}
-              hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
-            >
-              <Text style={styles.devButtonText}>{showDebug ? 'UI' : 'DEV'}</Text>
-            </TouchableOpacity>
-          </View>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </RootKeyboardDismiss>
+              <TouchableOpacity
+                style={styles.devButton}
+                onPress={() => setShowDebug(v => !v)}
+                hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+              >
+                <Text style={styles.devButtonText}>{showDebug ? 'UI' : 'DEV'}</Text>
+              </TouchableOpacity>
+            </View>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </RootKeyboardDismiss>
+    </GestureHandlerRootView>
   );
 }
 

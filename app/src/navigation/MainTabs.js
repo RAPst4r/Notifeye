@@ -5,7 +5,7 @@ import { Colors } from "../theme/colors";
 
 import CircleScreen  from "../screens/main/CircleScreen";
 import DriveScreen   from "../screens/DrivingScreen";
-import ProfileScreen from "../screens/main/ProfileScreen";
+import ProfileNavigator from "./ProfileNavigator";
 
 const Tab = createBottomTabNavigator();
 
@@ -49,7 +49,7 @@ export default function MainTabs() {
     >
       <Tab.Screen name="Circle"  component={CircleScreen} />
       <Tab.Screen name="Drive"   component={DriveScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Profile" component={ProfileNavigator} />
     </Tab.Navigator>
   );
 }
