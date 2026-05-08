@@ -1,0 +1,87 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return request.auth.uid == uid;
+    }
+
+    // True if the requesting user is in target user's linkedUserIds list
+    function isLinkedTo(uid) {
+      return request.auth.uid in
+        get(/databases/$(database)/documents/users/$(uid)).data.linkedUserIds;
+    }
+
+    // ── users/{uid} ────────────────────────────────────────────────────────────
+
+    match /users/{uid} {
+      // A user can read their own profile, or any profile they are linked to
+      // (e.g. parent reads their teen's profile)
+      allow read: if isSignedIn() && (isOwner(uid) || isLinkedTo(uid));
+
+      // Only the account owner can create or update their own profile
+      allow create: if isSignedIn() && isOwner(uid);
+      allow update: if isSignedIn() && isOwner(uid);
+
+      // Profiles are never deleted from the client
+      allow delete: if false;
+    }
+
+    // ── inviteCodes/{code} ─────────────────────────────────────────────────────
+
+    // Invite code docs only contain { uid: string } — no PII.
+    // Any signed-in user can look up a code to initiate family linking.
+    // Only the owner of the code can create it (done in createUserProfile).
+    match /inviteCodes/{code} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+        request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // ── trips/{tripId} ─────────────────────────────────────────────────────────
+
+    match /trips/{tripId} {
+      // Driver reads their own trips; linked parents can also read
+      allow read: if isSignedIn() && (
+        resource.data.driverId == request.auth.uid ||
+        isLinkedTo(resource.data.driverId)
+      );
+
+      // Only the driver can create/update their own trip records
+      allow create: if isSignedIn() &&
+        request.resource.data.driverId == request.auth.uid;
+      allow update: if isSignedIn() &&
+        resource.data.driverId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // ── alerts/{alertId} ───────────────────────────────────────────────────────
+
+    match /alerts/{alertId} {
+      // Driver reads their own alerts; linked parents can also read
+      allow read: if isSignedIn() && (
+        resource.data.driverId == request.auth.uid ||
+        isLinkedTo(resource.data.driverId)
+      );
+
+      // Only the driver can create an alert (from the on-device detection engine)
+      allow create: if isSignedIn() &&
+        request.resource.data.driverId == request.auth.uid;
+
+      // Alerts are immutable and never deleted from the client
+      allow update, delete: if false;
+    }
+
+    // Deny everything else by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -8,12 +8,13 @@
 // is confirmed on a real physical device.
 
 import { useState, useCallback } from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
 import DetectionEngine from "../detection/DetectionEngine";
 import { ALERT_THRESHOLD } from "../../../model/scorer";
+import { logOut } from "../firebase/authService";
 
 const MAX_ALERT_LOG = 10;
 
@@ -92,7 +93,7 @@ function ContribBar({ label, value, max = 0.45 }) {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
-export default function DebugScreen() {
+export default function DebugScreen({ navigation }) {
   const [signals, setSignals]   = useState(null);
   const [alertLog, setAlertLog] = useState([]);
   const [status, setStatus]     = useState("Initializing...");
@@ -127,6 +128,16 @@ export default function DebugScreen() {
       </View>
 
       <ScrollView style={styles.dataPanel} contentContainerStyle={styles.dataPanelContent}>
+
+        {/* ── DEV: testing buttons ── */}
+        <View style={styles.devRow}>
+          <TouchableOpacity onPress={logOut} style={styles.devSignOut}>
+            <Text style={styles.devSignOutText}>DEV — Sign out</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate("Splash")} style={styles.devSignOut}>
+            <Text style={styles.devSignOutText}>DEV — Splash</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* ── Composite score ── */}
         <SectionHeader title="COMPOSITE DROWSINESS SCORE" />
@@ -299,6 +310,25 @@ const styles = StyleSheet.create({
   dataPanelContent: {
     paddingHorizontal: 14,
     paddingTop: 6,
+  },
+  devRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  devSignOut: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#333",
+    borderRadius: 6,
+  },
+  devSignOutText: {
+    color: "#555",
+    fontSize: 10,
+    fontFamily: "monospace",
   },
   sectionHeader: {
     color: C.label,
