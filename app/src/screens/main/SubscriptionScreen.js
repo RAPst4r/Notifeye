@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useMemo } from "react";
+import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,11 +6,14 @@ import {
   Dimensions,
   PanResponder,
   TouchableOpacity,
+  Animated,
   Alert,
 } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 import Svg, {
   Path,
   Circle,
+  Ellipse,
   G,
   Rect,
   Line,
@@ -19,32 +22,26 @@ import Svg, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors } from "../../theme/colors";
 
-// ── Screen dimensions ─────────────────────────────────────────────────────────
+// ── Module-level constants (safe-area-independent) ────────────────────────────
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
+const DESIGN_W         = 280;
+const DESIGN_H         = 350;
+const CANVAS_W         = SCREEN_W;
+const BANNER_H         = 44;
+const HEADER_CONTENT_H = 60; // px of header below the status bar (back btn row)
+const SX               = CANVAS_W / DESIGN_W;
+const PILL_W           = 72;  // pill label width
+const PILL_PAD         = 8;   // minimum margin from canvas edge
 
-// ── Design reference (control points were authored at 280×350) ────────────────
-
-const DESIGN_W = 280;
-const DESIGN_H = 350;
-
-// ── Road control points (Catmull-Rom, design-space) ──────────────────────────
+// ── Road control points ───────────────────────────────────────────────────────
 
 const RAW_POINTS = [
-  { x: 30,  y: 85  },
-  { x: 100, y: 100 },
-  { x: 210, y: 95  },
-  { x: 248, y: 128 },
-  { x: 225, y: 172 },
-  { x: 105, y: 188 },
-  { x: 48,  y: 220 },
-  { x: 55,  y: 262 },
-  { x: 190, y: 272 },
-  { x: 255, y: 298 },
-  { x: 265, y: 338 },
+  { x: 30,  y: 85  }, { x: 100, y: 100 }, { x: 210, y: 95  },
+  { x: 248, y: 128 }, { x: 225, y: 172 }, { x: 105, y: 188 },
+  { x: 48,  y: 220 }, { x: 55,  y: 262 }, { x: 190, y: 272 },
+  { x: 255, y: 298 }, { x: 265, y: 338 },
 ];
-
-// ── Stop t-parameters and labels ──────────────────────────────────────────────
 
 const STOP_T      = [0.08, 0.50, 0.92];
 const STOP_LABELS = ["Free", "Family", "Extended+"];
@@ -56,6 +53,7 @@ const PLANS = [
     name: "Free",
     price: "$0",
     period: "forever",
+    btnLabel: "Get started free",
     features: [
       "Real-time drowsiness alerts",
       "On-device AI — fully private",
@@ -68,7 +66,8 @@ const PLANS = [
   {
     name: "Family",
     price: "$10.99",
-    period: "month",
+    period: "/ month",
+    btnLabel: "Start 7-day free trial",
     features: [
       "Everything in Free",
       "Instant parent push alerts",
@@ -81,7 +80,8 @@ const PLANS = [
   {
     name: "Extended+",
     price: "$15.99",
-    period: "month",
+    period: "/ month",
+    btnLabel: "Start 7-day free trial",
     features: [
       "Everything in Family",
       "4–5 drivers covered",
@@ -93,19 +93,22 @@ const PLANS = [
   },
 ];
 
-// ── Static star positions (deterministic, design-space) ───────────────────────
+// ── Stars — canvas-width based, y independent of canvas height ───────────────
 
-const STATIC_STARS = Array.from({ length: 55 }, (_, i) => ({
-  x: (i * 137.508 + 17) % DESIGN_W,
-  y: (i * 63.112 + 11)  % (DESIGN_H * 0.6),
-  r: 0.5 + (i % 5) * 0.22,
+const STARS = Array.from({ length: 35 }, (_, i) => ({
+  x: (i * 137) % CANVAS_W,
+  y: 8 + (i * 79) % 85,
+  opacity: 0.10 + (i % 4) * 0.02,
 }));
+
+// ── Banner dot x-positions ────────────────────────────────────────────────────
+
+const DOT_X = [20, SCREEN_W / 2, SCREEN_W - 20];
 
 // ── Catmull-Rom math ──────────────────────────────────────────────────────────
 
 function crPoint(p0, p1, p2, p3, t) {
-  const t2 = t * t;
-  const t3 = t2 * t;
+  const t2 = t * t, t3 = t2 * t;
   return {
     x: 0.5 * (2*p1.x + (-p0.x+p2.x)*t + (2*p0.x-5*p1.x+4*p2.x-p3.x)*t2 + (-p0.x+3*p1.x-3*p2.x+p3.x)*t3),
     y: 0.5 * (2*p1.y + (-p0.y+p2.y)*t + (2*p0.y-5*p1.y+4*p2.y-p3.y)*t2 + (-p0.y+3*p1.y-3*p2.y+p3.y)*t3),
@@ -116,176 +119,266 @@ function samplePath(pts, t) {
   const n   = pts.length - 1;
   const seg = Math.min(Math.floor(t * n), n - 1);
   const lt  = t * n - seg;
-  return crPoint(
-    pts[Math.max(0, seg - 1)],
-    pts[seg],
-    pts[Math.min(n, seg + 1)],
-    pts[Math.min(n, seg + 2)],
-    lt,
-  );
+  return crPoint(pts[Math.max(0,seg-1)], pts[seg], pts[Math.min(n,seg+1)], pts[Math.min(n,seg+2)], lt);
 }
 
-function angleDeg(pts, t) {
-  const dt = 0.005;
-  const a  = samplePath(pts, Math.max(0, t - dt));
-  const b  = samplePath(pts, Math.min(1, t + dt));
-  return Math.atan2(b.y - a.y, b.x - a.x) * (180 / Math.PI) + 90;
+function pathAngleDeg(pts, t) {
+  const a = samplePath(pts, Math.max(0, t - 0.015));
+  const b = samplePath(pts, Math.min(1, t + 0.015));
+  return Math.atan2(b.y - a.y, b.x - a.x) * (180 / Math.PI);
 }
 
 function buildRoadPath(pts, sx, sy) {
   const s = pts.map(p => ({ x: p.x * sx, y: p.y * sy }));
   let d = `M ${s[0].x.toFixed(1)} ${s[0].y.toFixed(1)}`;
   for (let i = 0; i < s.length - 1; i++) {
-    const p0 = s[Math.max(0, i - 1)];
-    const p1 = s[i];
-    const p2 = s[i + 1];
-    const p3 = s[Math.min(s.length - 1, i + 2)];
-    const c1x = (p1.x + (p2.x - p0.x) / 6).toFixed(1);
-    const c1y = (p1.y + (p2.y - p0.y) / 6).toFixed(1);
-    const c2x = (p2.x - (p3.x - p1.x) / 6).toFixed(1);
-    const c2y = (p2.y - (p3.y - p1.y) / 6).toFixed(1);
-    d += ` C ${c1x} ${c1y} ${c2x} ${c2y} ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+    const p0 = s[Math.max(0,i-1)], p1 = s[i];
+    const p2 = s[i+1], p3 = s[Math.min(s.length-1,i+2)];
+    d += ` C ${(p1.x+(p2.x-p0.x)/6).toFixed(1)} ${(p1.y+(p2.y-p0.y)/6).toFixed(1)}` +
+         ` ${(p2.x-(p3.x-p1.x)/6).toFixed(1)} ${(p2.y-(p3.y-p1.y)/6).toFixed(1)}` +
+         ` ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
   }
   return d;
 }
+
+// ── Static road layer — drawn once, never re-renders ─────────────────────────
+// Receives roadPath and canvasH as props; both are stable after first render.
+
+const StaticRoadLayer = React.memo(function StaticRoadLayer({ roadPath, canvasH }) {
+  return (
+    <Svg
+      width={CANVAS_W}
+      height={canvasH}
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none"
+    >
+      <Rect x={0} y={0} width={CANVAS_W} height={canvasH} fill="#030B11" />
+
+      {STARS.map((s, i) => (
+        <Circle key={i} cx={s.x} cy={s.y} r={0.75} fill={`rgba(91,174,224,${s.opacity})`} />
+      ))}
+
+      {/* Road layers — outside in */}
+      <Path d={roadPath} stroke="rgba(91,174,224,0.05)" strokeWidth={30} fill="none" strokeLinecap="round" />
+      <Path d={roadPath} stroke="#0d1e2b"               strokeWidth={23} fill="none" strokeLinecap="round" />
+      <Path d={roadPath} stroke="#111d2b"               strokeWidth={17} fill="none" strokeLinecap="round" />
+      <Path d={roadPath} stroke="#0f1a27"               strokeWidth={11} fill="none" strokeLinecap="round" />
+      <Path d={roadPath} stroke="rgba(91,174,224,0.09)" strokeWidth={1.2} fill="none" strokeLinecap="round" strokeDasharray="9 11" />
+    </Svg>
+  );
+});
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SubscriptionScreen({ navigation }) {
   const insets = useSafeAreaInsets();
 
-  const CANVAS_W = SCREEN_W;
-  const CANVAS_H = SCREEN_H * 0.5;
-  const SX = CANVAS_W / DESIGN_W;
-  const SY = CANVAS_H / DESIGN_H;
+  // ── Dimensions that depend on safe-area insets ────────────────────────────
+  const headerH = insets.top + HEADER_CONTENT_H;
+  const canvasH = Math.floor((SCREEN_H - headerH) / 2);
+  const sY      = canvasH / DESIGN_H;
 
-  // ── Static geometry (memoised) ─────────────────────────────────────────────
-  const roadPath     = useMemo(() => buildRoadPath(RAW_POINTS, SX, SY), [SX, SY]);
-  const stopPositions = useMemo(
-    () => STOP_T.map(t => { const p = samplePath(RAW_POINTS, t); return { x: p.x * SX, y: p.y * SY }; }),
-    [SX, SY],
+  const roadPath = useMemo(() => buildRoadPath(RAW_POINTS, SX, sY), [sY]);
+  const stopPos  = useMemo(
+    () => STOP_T.map(t => { const p = samplePath(RAW_POINTS, t); return { x: p.x * SX, y: p.y * sY }; }),
+    [sY],
   );
 
-  // ── Animation state ────────────────────────────────────────────────────────
+  // ── Active stop state ─────────────────────────────────────────────────────
   const [activeStop, setActiveStop] = useState(0);
   const activeStopRef = useRef(0);
-  const vanTRef       = useRef(STOP_T[0]);
-  const [anim, setAnim] = useState({ vanT: STOP_T[0], pulse: 0, headlight: 0.7, glowR: 18 });
 
-  useEffect(() => { activeStopRef.current = activeStop; }, [activeStop]);
+  // ── Animation state ───────────────────────────────────────────────────────
+  const animRef    = useRef({ vanT: STOP_T[0], vanTargetT: STOP_T[0] });
+  const rafRef     = useRef(null);
+  const startMsRef = useRef(Date.now());
+  const [animState, setAnimState] = useState({ animT: 0, vanT: STOP_T[0] });
 
+  // ── Dot scale animations ──────────────────────────────────────────────────
+  const dotScales = useRef([
+    new Animated.Value(1.3),
+    new Animated.Value(1.0),
+    new Animated.Value(1.0),
+  ]).current;
+
+  // ── Swipe label fade ──────────────────────────────────────────────────────
+  const swipeLabelOpacity = useRef(new Animated.Value(1)).current;
+  const hasNavigated      = useRef(false);
+
+  // ── Touch start for canvas tap detection ─────────────────────────────────
+  const touchStartRef = useRef({ x: 0, y: 0 });
+
+  // ── goTo — stable callback, all deps are refs ─────────────────────────────
+  const goTo = useCallback((index) => {
+    activeStopRef.current = index;
+    setActiveStop(index);
+    animRef.current.vanTargetT = STOP_T[index];
+
+    dotScales.forEach((scale, i) => {
+      Animated.timing(scale, {
+        toValue: i === index ? 1.3 : 1.0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    if (!hasNavigated.current && index !== 0) {
+      hasNavigated.current = true;
+      Animated.timing(swipeLabelOpacity, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, []); // stable — only uses refs and stable setters
+
+  // ── Canvas stop tap detection (banner dots are self-handled) ─────────────
+  // locationY from PanResponder is relative to the root view, so canvas stops
+  // live at root-y = headerH … headerH+canvasH. Subtract headerH to get canvas-local y.
+  const checkTap = useCallback((tx, ty) => {
+    const localY = ty - headerH;
+    if (localY < 0 || localY > canvasH) return;
+    for (let i = 0; i < 3; i++) {
+      const sp = stopPos[i];
+      if (Math.hypot(tx - sp.x, localY - sp.y) <= 18) { goTo(i); return; }
+      if (tx >= sp.x - 44 && tx <= sp.x + 44 && localY >= sp.y - 36 && localY <= sp.y - 2) {
+        goTo(i); return;
+      }
+    }
+  }, [goTo, headerH, canvasH, stopPos]);
+
+  // ── Animation loop ────────────────────────────────────────────────────────
   useEffect(() => {
-    const t0 = Date.now();
-    const id = setInterval(() => {
-      const elapsed   = (Date.now() - t0) / 1000;
-      const pulse     = (Math.sin(elapsed * 2.2) + 1) / 2;
-      const headlight = 0.35 + 0.45 * ((Math.sin(elapsed * 1.8) + 1) / 2);
-      const glowR     = 17   + 5    * ((Math.sin(elapsed * 1.4) + 1) / 2);
-      vanTRef.current += (STOP_T[activeStopRef.current] - vanTRef.current) * 0.07;
-      setAnim({ vanT: vanTRef.current, pulse, headlight, glowR });
-    }, 16);
-    return () => clearInterval(id);
+    startMsRef.current = Date.now();
+    const loop = () => {
+      const animT = (Date.now() - startMsRef.current) / 1000;
+      animRef.current.vanT += (animRef.current.vanTargetT - animRef.current.vanT) * 0.07;
+      setAnimState({ animT, vanT: animRef.current.vanT });
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, []);
 
-  // ── Swipe responder ────────────────────────────────────────────────────────
+  // ── Pan responder — full-screen swipe + canvas tap ────────────────────────
+  // onStartShouldSetPanResponder: true — claims every touch so we can record
+  //   the start position for canvas stop tap detection.
+  // onMoveShouldSetPanResponder: only claim after 10px horizontal movement,
+  //   so TouchableOpacity children (banner dots) can win on clean taps.
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder:  (_, g) => Math.abs(g.dx) > 8,
+      onMoveShouldSetPanResponder:  (_, g) => Math.abs(g.dx) > 10,
+      onPanResponderGrant: (e) => {
+        touchStartRef.current = {
+          x: e.nativeEvent.locationX,
+          y: e.nativeEvent.locationY,
+        };
+      },
       onPanResponderRelease: (_, g) => {
         if (g.dx < -25) {
           const next = Math.min(2, activeStopRef.current + 1);
           activeStopRef.current = next;
-          setActiveStop(next);
+          goToRef.current(next);
         } else if (g.dx > 25) {
           const prev = Math.max(0, activeStopRef.current - 1);
           activeStopRef.current = prev;
-          setActiveStop(prev);
+          goToRef.current(prev);
+        } else if (Math.abs(g.dx) < 10 && Math.abs(g.dy) < 10) {
+          checkTapRef.current(touchStartRef.current.x, touchStartRef.current.y);
         }
       },
     }),
   ).current;
 
-  // ── Derived van position ───────────────────────────────────────────────────
-  const vanRaw   = samplePath(RAW_POINTS, anim.vanT);
-  const vanX     = vanRaw.x * SX;
-  const vanY     = vanRaw.y * SY;
-  const vanAngle = angleDeg(RAW_POINTS, anim.vanT);
+  // Keep refs current so PanResponder closure always calls latest versions
+  const goToRef     = useRef(goTo);
+  const checkTapRef = useRef(checkTap);
+  useEffect(() => { goToRef.current = goTo; });
+  useEffect(() => { checkTapRef.current = checkTap; });
+
+  // ── Derived animated values ───────────────────────────────────────────────
+  const { animT, vanT } = animState;
+  const vanRaw    = samplePath(RAW_POINTS, vanT);
+  const vanX      = vanRaw.x * SX;
+  const vanY      = vanRaw.y * sY;
+  const vanAngle  = pathAngleDeg(RAW_POINTS, vanT);
+  const glowR     = 18 + 4 * Math.sin(animT * 3);
+  const hlOpacity = (0.5 + 0.3 * Math.sin(animT * 3.5)).toFixed(3);
 
   const plan = PLANS[activeStop];
-  const hl   = anim.headlight.toFixed(3);
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} {...panResponder.panHandlers}>
 
-      {/* ── Road canvas ── */}
-      <View style={{ width: CANVAS_W, height: CANVAS_H }} {...panResponder.panHandlers}>
-        <Svg width={CANVAS_W} height={CANVAS_H}>
+      {/* ── Header — back button + wordmark + tagline ── */}
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 10, left: 10, right: 10, bottom: 10 }}
+        >
+          <Text style={styles.backArrow}>←</Text>
+        </TouchableOpacity>
 
-          {/* Background */}
-          <Rect x={0} y={0} width={CANVAS_W} height={CANVAS_H} fill="#030B11" />
+        <View style={styles.headerCenter}>
+          <Text style={styles.wordmark}>NOTIFEYE</Text>
+          <Text style={styles.tagline}>Your coverage journey</Text>
+        </View>
 
-          {/* Stars */}
-          {STATIC_STARS.map((s, i) => (
-            <Circle key={i} cx={s.x * SX} cy={s.y * SY} r={s.r} fill="rgba(91,174,224,0.10)" />
-          ))}
+        {/* Spacer matches back button width to keep wordmark centred */}
+        <View style={styles.headerEnd} />
+      </View>
 
-          {/* Road — outer glow */}
-          <Path d={roadPath} stroke="rgba(91,174,224,0.05)" strokeWidth={30} fill="none" strokeLinecap="round" />
-          {/* Road — border */}
-          <Path d={roadPath} stroke="#0d1e2b"              strokeWidth={23} fill="none" strokeLinecap="round" />
-          {/* Road — surface */}
-          <Path d={roadPath} stroke="#111d2b"              strokeWidth={17} fill="none" strokeLinecap="round" />
-          {/* Road — inner surface */}
-          <Path d={roadPath} stroke="#0f1a27"              strokeWidth={11} fill="none" strokeLinecap="round" />
-          {/* Road — centre dashes */}
-          <Path d={roadPath} stroke="rgba(91,174,224,0.09)" strokeWidth={1.2} fill="none" strokeLinecap="round" strokeDasharray="9 11" />
+      {/* ── Road canvas — starts below the header ── */}
+      <View style={{ width: CANVAS_W, height: canvasH }}>
+        <StaticRoadLayer roadPath={roadPath} canvasH={canvasH} />
 
+        <Svg
+          width={CANVAS_W}
+          height={canvasH}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        >
           {/* ── Stops ── */}
           {STOP_LABELS.map((label, i) => {
-            const sp       = stopPositions[i];
+            const sp       = stopPos[i];
             const isActive = i === activeStop;
+            const ringBase = [14, 24, 36];
+            const pillLeft = Math.max(PILL_PAD, Math.min(sp.x - PILL_W / 2, CANVAS_W - PILL_W - PILL_PAD));
+            const pillCx   = pillLeft + PILL_W / 2;
             return (
               <G key={label}>
-                {/* Pulse rings (active only) */}
-                {isActive && [0, 1, 2].map(ri => (
-                  <Circle
-                    key={ri}
-                    cx={sp.x}
-                    cy={sp.y}
-                    r={8 + anim.pulse * 10 + ri * 6}
-                    fill="none"
-                    stroke="rgba(91,174,224,0.08)"
-                    strokeWidth={1.5}
-                    opacity={Math.max(0, 1 - anim.pulse - ri * 0.25)}
-                  />
-                ))}
-                {/* Pill background */}
+                {isActive && ringBase.map((r, ri) => {
+                  const s = Math.sin(animT * 2.2 + ri * 1.1);
+                  return (
+                    <Circle
+                      key={ri}
+                      cx={sp.x}
+                      cy={sp.y}
+                      r={r + 2 * s}
+                      fill="none"
+                      stroke={`rgba(91,174,224,${(0.08 + 0.05 * ((s + 1) / 2)).toFixed(3)})`}
+                      strokeWidth={1.2}
+                    />
+                  );
+                })}
                 <Rect
-                  x={sp.x - 23}
-                  y={sp.y - 28}
-                  width={46}
-                  height={16}
-                  rx={8}
+                  x={pillLeft} y={sp.y - 30} width={PILL_W} height={18} rx={9}
                   fill={isActive ? "#5BAEE0" : "#0d1e2b"}
                   stroke={isActive ? "#5BAEE0" : "#1e3a50"}
                   strokeWidth={1}
                 />
-                {/* Pill label */}
                 <SvgText
-                  x={sp.x}
-                  y={sp.y - 17}
+                  x={pillCx} y={sp.y - 18}
                   textAnchor="middle"
+                  fontSize={isActive ? 11 : 10}
+                  fontWeight={isActive ? "500" : "400"}
                   fill={isActive ? "#030B11" : "#8899aa"}
-                  fontSize={8}
-                  fontWeight="600"
                 >
                   {label}
                 </SvgText>
-                {/* Stop dot */}
                 <Circle
-                  cx={sp.x}
-                  cy={sp.y}
+                  cx={sp.x} cy={sp.y}
                   r={isActive ? 6 : 3.5}
                   fill={isActive ? "#5BAEE0" : "#1e3a50"}
                 />
@@ -294,96 +387,129 @@ export default function SubscriptionScreen({ navigation }) {
           })}
 
           {/* ── Van glow ── */}
-          <Circle cx={vanX} cy={vanY} r={anim.glowR} fill="none" stroke="rgba(91,174,224,0.10)" strokeWidth={7} />
+          <Circle
+            cx={vanX} cy={vanY} r={glowR}
+            fill="none"
+            stroke={`rgba(91,174,224,${(0.09 + 0.06 * ((Math.sin(animT * 3) + 1) / 2)).toFixed(3)})`}
+            strokeWidth={6}
+          />
 
-          {/* ── Van body ── */}
+          {/* ── Van — landscape orientation, front faces right (+x) ── */}
           <G transform={`translate(${vanX.toFixed(1)} ${vanY.toFixed(1)}) rotate(${vanAngle.toFixed(1)})`}>
-            {/* Outer body */}
-            <Rect x={-11} y={-18} width={22} height={36} rx={4} fill="#1a3d60" stroke="#5BAEE0" strokeWidth={0.8} />
-            {/* Centre panel */}
-            <Rect x={-8}  y={-15} width={16} height={28} rx={2} fill="#1e4a75" />
-            {/* Roof */}
-            <Rect x={-7}  y={-12} width={14} height={22} rx={2} fill="#0a1a28" />
-            {/* Panoramic roof rails */}
-            <Line x1={-5} y1={-11} x2={-5} y2={9} stroke="rgba(91,174,224,0.3)" strokeWidth={1} />
-            <Line x1={5}  y1={-11} x2={5}  y2={9} stroke="rgba(91,174,224,0.3)" strokeWidth={1} />
-            {/* Front windshield */}
-            <Rect x={-8} y={-18} width={16} height={7} rx={1.5} fill="rgba(91,174,224,0.25)" />
-            <Line x1={0} y1={-18} x2={0} y2={-11} stroke="rgba(91,174,224,0.40)" strokeWidth={0.8} />
-            {/* Rear window */}
-            <Rect x={-7} y={11} width={14} height={5} rx={1} fill="rgba(91,174,224,0.15)" />
-            {/* Door handle detail */}
-            <Rect x={-14} y={-3} width={3} height={5} rx={1} fill="#0d1e2b" />
-            <Rect x={11}  y={-3} width={3} height={5} rx={1} fill="#0d1e2b" />
-            {/* Wheel — front-left */}
-            <Rect x={-15} y={-17} width={5} height={8} rx={1.5} fill="#060f18" />
-            <Rect x={-14} y={-16} width={3} height={6} rx={1}   fill="#1a3a5c" />
-            <Circle cx={-12.5} cy={-13} r={1.5} fill="#5BAEE0" />
-            {/* Wheel — front-right */}
-            <Rect x={10} y={-17} width={5} height={8} rx={1.5} fill="#060f18" />
-            <Rect x={11} y={-16} width={3} height={6} rx={1}   fill="#1a3a5c" />
-            <Circle cx={12.5} cy={-13} r={1.5} fill="#5BAEE0" />
-            {/* Wheel — rear-left */}
-            <Rect x={-15} y={10} width={5} height={8} rx={1.5} fill="#060f18" />
-            <Rect x={-14} y={11} width={3} height={6} rx={1}   fill="#1a3a5c" />
-            <Circle cx={-12.5} cy={14} r={1.5} fill="#5BAEE0" />
-            {/* Wheel — rear-right */}
-            <Rect x={10} y={10} width={5} height={8} rx={1.5} fill="#060f18" />
-            <Rect x={11} y={11} width={3} height={6} rx={1}   fill="#1a3a5c" />
-            <Circle cx={12.5} cy={14} r={1.5} fill="#5BAEE0" />
-            {/* Headlights (pulsing) */}
-            <Circle cx={-6} cy={-20} r={2.5} fill={`rgba(91,174,224,${hl})`} />
-            <Circle cx={6}  cy={-20} r={2.5} fill={`rgba(91,174,224,${hl})`} />
-            {/* Tail lights */}
-            <Rect x={-9} y={17} width={5} height={3} rx={1} fill="rgba(220,55,55,0.75)" />
-            <Rect x={4}  y={17} width={5} height={3} rx={1} fill="rgba(220,55,55,0.75)" />
+            <Rect x={-19} y={-11} width={38} height={22} rx={5} fill="#1a3d60" stroke="#5BAEE0" strokeWidth={1.2} />
+            <Rect x={-16} y={-8}  width={32} height={16} rx={3} fill="#1e4a75" />
+            <Rect x={-11} y={-7}  width={22} height={14} rx={3} fill="#0a1a28" />
+            <Line x1={-10} y1={-6} x2={10} y2={-6} stroke="rgba(91,174,224,0.3)" strokeWidth={1} />
+            <Line x1={-10} y1={6}  x2={10} y2={6}  stroke="rgba(91,174,224,0.3)" strokeWidth={1} />
+            <Path d="M 11,-8 C 15,-9 17,-8 19,-6 L 19,6 C 17,8 15,9 11,8 Z" fill="rgba(91,174,224,0.22)" stroke="rgba(91,174,224,0.5)" strokeWidth={0.7} />
+            <Path d="M -11,-6 C -15,-7 -17,-6 -19,-4 L -19,4 C -17,6 -15,7 -11,6 Z" fill="rgba(91,174,224,0.12)" stroke="rgba(91,174,224,0.3)" strokeWidth={0.7} />
+            {[[-12,-12],[11,-12],[-12,12],[11,12]].map(([wx,wy], wi) => (
+              <G key={wi}>
+                <Ellipse cx={wx} cy={wy} rx={4.5} ry={3} fill="#060f18" stroke="#1e3a50" strokeWidth={0.5} />
+                <Ellipse cx={wx} cy={wy} rx={2.5} ry={1.7} fill="#1a3a5c" />
+                <Circle  cx={wx} cy={wy} r={0.9} fill="#5BAEE0" />
+              </G>
+            ))}
+            <Ellipse cx={17} cy={-5} rx={2.5} ry={1.5} fill={`rgba(91,174,224,${hlOpacity})`} />
+            <Ellipse cx={17} cy={5}  rx={2.5} ry={1.5} fill={`rgba(91,174,224,${hlOpacity})`} />
+            <Ellipse cx={-20} cy={-5} rx={2} ry={1.4} fill="rgba(220,55,55,0.75)" />
+            <Ellipse cx={-20} cy={5}  rx={2} ry={1.4} fill="rgba(220,55,55,0.75)" />
           </G>
-
         </Svg>
 
-        {/* Header overlaid above canvas */}
-        <View
-          style={[StyleSheet.absoluteFill, styles.headerOverlay, { paddingTop: insets.top + 14 }]}
-          pointerEvents="none"
-        >
-          <Text style={styles.wordmark}>NOTIFEYE</Text>
-          <Text style={styles.tagline}>Your coverage journey</Text>
+        {/* Transparent tap targets for road stop pills + dots.
+            TouchableOpacity children win the responder over the parent
+            PanResponder on clean taps — the same mechanism as the banner dots. */}
+        {stopPos.map((sp, i) => {
+          const pl = Math.max(PILL_PAD, Math.min(sp.x - PILL_W / 2, CANVAS_W - PILL_W - PILL_PAD));
+          return (
+            <TouchableOpacity
+              key={i}
+              style={{
+                position: "absolute",
+                left: pl - 8,
+                top: sp.y - 38,
+                width: PILL_W + 16,
+                height: 50,
+              }}
+              onPress={() => goToRef.current(i)}
+              activeOpacity={1}
+            />
+          );
+        })}
+      </View>
+
+      {/* ── Banner ── */}
+      <View style={styles.banner}>
+        <Animated.Text style={[styles.swipeLabel, { opacity: swipeLabelOpacity }]}>
+          {"← SWIPE TO EXPLORE PLANS →"}
+        </Animated.Text>
+
+        {/* Dots — each is a TouchableOpacity so it wins the responder over the
+            parent PanResponder on clean taps. The PanResponder only steals back
+            when onMoveShouldSetPanResponder fires (dx > 10), which lets swipes
+            starting on a dot still work. */}
+        <View style={styles.dotsRow}>
+          {[0, 1, 2].map(i => (
+            <TouchableOpacity
+              key={i}
+              style={[
+                styles.dotTouchable,
+                i === 0 ? styles.dotLeft : i === 1 ? styles.dotCenter : styles.dotRight,
+              ]}
+              onPress={() => goToRef.current(i)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, left: 8, right: 8, bottom: 8 }}
+            >
+              <Animated.View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: i === activeStop ? "#5BAEE0" : "#1e3a50",
+                  transform: [{ scale: dotScales[i] }],
+                }}
+              />
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
 
       {/* ── Plan panel ── */}
-      <View style={[styles.panel, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <Text style={styles.planName}>{plan.name}</Text>
-
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>{plan.price}</Text>
-          <Text style={styles.period}> / {plan.period}</Text>
-        </View>
-
-        <View style={styles.featureList}>
-          {plan.features.map(f => (
-            <View key={f} style={styles.featureRow}>
-              <Text style={styles.checkmark}>✓</Text>
-              <Text style={styles.featureText}>{f}</Text>
-            </View>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={styles.subscribeBtn}
-          activeOpacity={0.85}
-          onPress={() => {
-            if (activeStop === 0) {
-              Alert.alert("You're on Free", "You already have access to all Free features.");
-            } else {
-              Alert.alert("Coming Soon", "In-app purchase checkout coming soon.");
-            }
-          }}
+      <View style={styles.panel}>
+        {/* Scrollable content — plan name, price, features */}
+        <ScrollView
+          style={styles.panelScroll}
+          contentContainerStyle={styles.panelScrollContent}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.subscribeBtnText}>
-            {activeStop === 0 ? "Get Started Free" : `Subscribe — ${plan.price}/mo`}
-          </Text>
-        </TouchableOpacity>
+          <Text style={styles.planName}>{plan.name}</Text>
+
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>{plan.price}</Text>
+            <Text style={styles.period}> {plan.period}</Text>
+          </View>
+
+          <View style={styles.featureList}>
+            {plan.features.map(f => (
+              <View key={f} style={styles.featureRow}>
+                <Text style={styles.checkmark}>✓</Text>
+                <Text style={styles.featureText}>{f}</Text>
+              </View>
+            ))}
+          </View>
+        </ScrollView>
+
+        {/* Subscribe button — pinned below scroll, always visible */}
+        <View style={[styles.subscribeBtnWrap, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}>
+          <TouchableOpacity
+            style={styles.subscribeBtn}
+            activeOpacity={0.85}
+            onPress={() => Alert.alert("Coming soon", "In-app purchase checkout coming soon.")}
+          >
+            <Text style={styles.subscribeBtnText}>{plan.btnLabel}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
     </View>
@@ -398,17 +524,34 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgPrimary,
   },
 
-  // ── Header overlay ────────────────────────────────────────────────────────────
-  headerOverlay: {
+  // ── Header ───────────────────────────────────────────────────────────────────
+  header: {
+    width: "100%",
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-start",
+    justifyContent: "space-between",
+    backgroundColor: Colors.bgPrimary,
+    paddingHorizontal: 16,
+    paddingBottom: 6,
   },
+  headerCenter: {
+    flex: 1,
+    alignItems: "center",
+  },
+  headerEnd: {
+    width: 40, // mirrors topBarEnd width from Settings to keep wordmark centred
+  },
+
+  // ── Back button — identical to Settings screen ────────────────────────────────
+  backArrow: { color: Colors.white, fontSize: 22 },
+
+  // ── Wordmark / tagline (same styling as before, just repositioned) ────────────
   wordmark: {
     color: "#5BAEE0",
     fontSize: 9,
     letterSpacing: 1.6,
     fontWeight: "700",
-    marginBottom: 6,
+    marginBottom: 5,
   },
   tagline: {
     color: Colors.white,
@@ -416,25 +559,66 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
+  // ── Banner ───────────────────────────────────────────────────────────────────
+  banner: {
+    height: BANNER_H,
+    backgroundColor: "#030B11",
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderTopColor: "rgba(30,58,80,0.27)",
+    borderBottomColor: "rgba(30,58,80,0.27)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  swipeLabel: {
+    color: "#445566",
+    fontSize: 9,
+    letterSpacing: 0.63,
+  },
+  dotsRow: {
+    width: "100%",
+    height: 10,
+    position: "relative",
+  },
+  // Each dot is a TouchableOpacity absolutely positioned — the Animated.View
+  // inside it carries the visual + scale transform.
+  dotTouchable: {
+    position: "absolute",
+    top: 1,
+  },
+  dotLeft:   { left: 16 },
+  dotCenter: { left: SCREEN_W / 2 - 4 },
+  dotRight:  { right: 16 },
+
   // ── Plan panel ────────────────────────────────────────────────────────────────
   panel: {
     flex: 1,
     backgroundColor: Colors.bgPrimary,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(30,58,80,0.4)",
-    paddingHorizontal: 24,
-    paddingTop: 18,
+  },
+  panelScroll: {
+    flex: 1,
+  },
+  panelScrollContent: {
+    paddingHorizontal: 18,
+    paddingTop: 22,
+    paddingBottom: 8,
+  },
+  subscribeBtnWrap: {
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    backgroundColor: Colors.bgPrimary,
   },
   planName: {
     color: Colors.white,
     fontSize: 20,
     fontWeight: "500",
-    marginBottom: 6,
+    marginBottom: 4,
   },
   priceRow: {
     flexDirection: "row",
     alignItems: "baseline",
-    marginBottom: 14,
+    marginBottom: 12,
   },
   price: {
     color: "#5BAEE0",
@@ -446,17 +630,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  // ── Feature list ──────────────────────────────────────────────────────────────
+  // ── Features ─────────────────────────────────────────────────────────────────
   featureList: {
-    flex: 1,
-    justifyContent: "center",
-    gap: 7,
-    marginBottom: 14,
+    gap: 6,
+    marginBottom: 4,
   },
   featureRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   checkmark: {
     color: "#5BAEE0",
